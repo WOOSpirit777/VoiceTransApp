@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 源语言标签 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvSourceLang"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#E3F2FD"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp"
+                android:text="中文"
+                android:textColor="#1976D2"
+                android:textSize="10sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tvSourceTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="12:30"
+                android:textColor="#9E9E9E"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- 源语言文本 -->
+        <TextView
+            android:id="@+id/tvSourceText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="你好世界"
+            android:textColor="#212121"
+            android:textSize="16sp" />
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="12dp"
+            android:background="#E0E0E0" />
+
+        <!-- 目标语言标签 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvTargetLang"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#FFF3E0"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp"
+                android:text="英文"
+                android:textColor="#F57C00"
+                android:textSize="10sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/ivPlayAudio"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_media_play"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- 目标语言文本 -->
+        <TextView
+            android:id="@+id/tvTargetText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Hello World"
+            android:textColor="#424242"
+            android:textSize="16sp" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

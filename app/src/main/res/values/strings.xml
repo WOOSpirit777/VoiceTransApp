@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">语音翻译</string>
+    <string name="btn_voice_hint">长按按钮开始录音</string>
+    <string name="recording">正在录音...</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">未连接</string>
+    <string name="connecting">连接中...</string>
+    <string name="error">发生错误</string>
+</resources>

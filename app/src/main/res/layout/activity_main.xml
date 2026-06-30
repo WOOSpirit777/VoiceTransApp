@@ -19,13 +19,24 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:layout_marginStart="16dp"
             android:text="语音翻译"
             android:textColor="@android:color/white"
             android:textSize="20sp"
             android:textStyle="bold" />
+
+        <!-- 设置按钮 -->
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:contentDescription="设置"
+            app:tint="@android:color/white" />
     </LinearLayout>
 
     <!-- 连接状态 -->
@@ -74,27 +85,38 @@
                 android:id="@+id/btnChinese"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:backgroundTint="#2196F3"
-                android:text="中文 🎤"
+                android:text="中文"
                 android:textColor="@android:color/white"
-                android:textSize="16sp" />
+                android:textSize="14sp" />
 
             <Button
                 android:id="@+id/btnEnglish"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginHorizontal="4dp"
                 android:layout_weight="1"
                 android:backgroundTint="#9E9E9E"
-                android:text="英文 🎤"
+                android:text="英文"
                 android:textColor="@android:color/white"
-                android:textSize="16sp" />
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnIndonesian"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:backgroundTint="#9E9E9E"
+                android:text="印尼语"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <!-- 自定义录音按钮 -->
-        <com.example.voicetrans.ui.AudioButtonView
+        <com.aibabel.voicetrans.ui.AudioButtonView
             android:id="@+id/audioButtonView"
             android:layout_width="200dp"
             android:layout_height="200dp"
@@ -107,7 +129,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:gravity="center"
-            android:text="长按按钮开始录音"
+            android:text="点击按钮开始录音"
             android:textColor="#757575"
             android:textSize="14sp" />
 

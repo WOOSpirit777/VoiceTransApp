@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/secondary_screen"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1A1A1A">
+
+    <!-- 语言标签 -->
+    <TextView
+        android:id="@+id/tvLangLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:background="#333333"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="翻译结果"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
+
+    <!-- 内容ScrollView -->
+    <ScrollView
+        android:id="@+id/contentScrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/tvLangLabel"
+        android:layout_centerInParent="true"
+        android:padding="32dp">
+
+        <TextView
+            android:id="@+id/contentTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="等待翻译..."
+            android:textColor="#FFFFFF"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+    </ScrollView>
+
+</RelativeLayout>

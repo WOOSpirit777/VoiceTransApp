@@ -1,10 +1,7 @@
-package com.example.voicetrans.model;
+package com.aibabel.voicetrans.model;
 
 import com.google.gson.annotations.SerializedName;
 
-/**
- * WebSocket响应结果
- */
 public class TranslationResult {
 
     @SerializedName("type")
@@ -25,7 +22,6 @@ public class TranslationResult {
     @SerializedName("timestamp")
     private long timestamp;
 
-    // Getters and Setters
     public String getType() {
         return type;
     }
@@ -74,8 +70,8 @@ public class TranslationResult {
         this.timestamp = timestamp;
     }
 
-    public boolean isResult() {
-        return "result".equals(type);
+    public boolean isText() {
+        return "text".equals(type);
     }
 
     public boolean isError() {
@@ -88,6 +84,14 @@ public class TranslationResult {
 
     public boolean isTarget() {
         return "target".equals(classType);
+    }
+
+    public boolean isTts() {
+        return "tts".equals(classType);
+    }
+
+    public boolean isTtsFinish() {
+        return isTts() && "tts finish".equals(text);
     }
 
     @Override

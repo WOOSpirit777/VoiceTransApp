@@ -1,4 +1,4 @@
 # Add project specific ProGuard rules here.
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
--keep class com.example.voicetrans.model.** { *; }
+-keep class com.aibabel.voicetrans.model.** { *; }

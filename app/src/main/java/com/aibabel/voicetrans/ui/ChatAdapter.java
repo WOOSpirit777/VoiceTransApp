@@ -1,4 +1,4 @@
-package com.example.voicetrans.ui;
+package com.aibabel.voicetrans.ui;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,8 +9,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.voicetrans.R;
-import com.example.voicetrans.model.ChatMessage;
+import com.aibabel.voicetrans.R;
+import com.aibabel.voicetrans.model.ChatMessage;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;

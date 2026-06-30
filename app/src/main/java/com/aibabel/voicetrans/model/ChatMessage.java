@@ -1,4 +1,4 @@
-package com.example.voicetrans.model;
+package com.aibabel.voicetrans.model;
 
 /**
  * 聊天消息实体
@@ -90,10 +90,10 @@ public class ChatMessage {
     }
 
     public String getSourceLangDisplay() {
-        return "zh_CN".equals(sourceLang) ? "中文" : "英文";
+        return "zh".equals(sourceLang) ? "中文" : "英文";
     }
 
     public String getTargetLangDisplay() {
-        return "zh_CN".equals(sourceLang) ? "英文" : "中文";
+        return "zh".equals(sourceLang) ? "英文" : "中文";
     }
 }

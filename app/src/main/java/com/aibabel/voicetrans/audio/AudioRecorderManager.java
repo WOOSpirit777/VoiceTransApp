@@ -1,20 +1,23 @@
-package com.example.voicetrans.audio;
+package com.aibabel.voicetrans.audio;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import androidx.core.content.ContextCompat;
-
-import com.example.voicetrans.util.Constants;
+import com.aibabel.voicetrans.util.Constants;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.Locale;
 
 /**
  * PCM音频录制管理器
@@ -37,6 +40,11 @@ public class AudioRecorderManager {
     // 录制的音频数据（用于完整保存）
     private ByteArrayOutputStream recordedData;
 
+    // PCM文件保存
+    private File pcmFile;
+    private FileOutputStream pcmFileOutputStream;
+    private String currentLang = "zh";
+
     public interface AudioRecordCallback {
         void onRecordingStart();
         void onRecordingData(byte[] data, int size);
@@ -56,7 +64,7 @@ public class AudioRecorderManager {
 
         // 缓冲区大小设置为能容纳多个chunk
         bufferSize = Math.max(minBufferSize, Constants.CHUNK_SIZE * 4);
-        Log.d(TAG, "Buffer size: " + bufferSize);
+        Log.e(TAG, "Buffer size: " + bufferSize);
     }
 
     public static synchronized AudioRecorderManager getInstance() {
@@ -74,6 +82,26 @@ public class AudioRecorderManager {
         return isRecording;
     }
 
+    public void setLanguage(String lang) {
+        this.currentLang = lang;
+    }
+
+    /**
+     * 保存录音数据到文件
+     */
+    private void saveToFile(byte[] data, boolean append) {
+        if (pcmFile == null || pcmFileOutputStream == null) {
+            return;
+        }
+        try {
+            if (append) {
+                pcmFileOutputStream.write(data);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error writing to file: " + e.getMessage());
+        }
+    }
+
     /**
      * 开始录制
      */
@@ -84,6 +112,19 @@ public class AudioRecorderManager {
         }
 
         try {
+            // 创建PCM文件
+            File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC);
+            if (!storageDir.exists()) {
+                storageDir.mkdirs();
+            }
+
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            String fileName = "VoiceTrans_" + currentLang + "_" + timeStamp + ".pcm";
+            pcmFile = new File(storageDir, fileName);
+
+            pcmFileOutputStream = new FileOutputStream(pcmFile);
+            Log.e(TAG, "PCM file created: " + pcmFile.getAbsolutePath());
+
             // 创建AudioRecord
             audioRecord = new AudioRecord(
                     MediaRecorder.AudioSource.MIC,
@@ -106,7 +147,7 @@ public class AudioRecorderManager {
             isRecording = true;
             recordedData = new ByteArrayOutputStream();
 
-            Log.d(TAG, "Recording started");
+            Log.e(TAG, "Recording started");
 
             if (callback != null) {
                 mainHandler.post(callback::onRecordingStart);
@@ -136,6 +177,9 @@ public class AudioRecorderManager {
             if (bytesRead > 0) {
                 // 复制有效数据
                 byte[] validData = Arrays.copyOf(buffer, bytesRead);
+
+                // 保存到PCM文件
+                saveToFile(validData, true);
 
                 // 保存完整数据
                 if (recordedData != null) {
@@ -176,13 +220,20 @@ public class AudioRecorderManager {
                 audioRecord = null;
             }
 
-            Log.d(TAG, "Recording stopped");
+            // 关闭PCM文件
+            if (pcmFileOutputStream != null) {
+                pcmFileOutputStream.close();
+                pcmFileOutputStream = null;
+                Log.e(TAG, "PCM file saved: " + pcmFile.getAbsolutePath());
+            }
+
+            Log.e(TAG, "Recording stopped");
 
             // 获取完整数据
             byte[] fullData = null;
             if (recordedData != null) {
                 fullData = recordedData.toByteArray();
-                Log.d(TAG, "Total recorded: " + fullData.length + " bytes");
+                Log.e(TAG, "Total recorded: " + fullData.length + " bytes");
             }
 
             if (callback != null) {

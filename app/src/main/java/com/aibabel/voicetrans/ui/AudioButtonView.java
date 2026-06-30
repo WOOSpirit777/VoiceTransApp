@@ -1,19 +1,16 @@
-package com.example.voicetrans.ui;
+package com.aibabel.voicetrans.ui;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.core.content.ContextCompat;
 
-import com.example.voicetrans.R;
+import com.aibabel.voicetrans.R;
 
 /**
  * 自定义长按录音按钮
@@ -35,8 +32,8 @@ public class AudioButtonView extends View {
     private boolean isRecording = false;
     private boolean isPressed = false;
 
-    private String normalText = "按住说话";
-    private String recordingText = "松开结束";
+    private String normalText = "开始录音";
+    private String recordingText = "结束录音";
 
     private AudioButtonCallback callback;
 
@@ -116,22 +113,37 @@ public class AudioButtonView extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 isPressed = true;
-                startRecordingAnimation();
-                if (callback != null) {
-                    callback.onRecordingStart();
-                }
                 return true;
 
             case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
+                if (isPressed) {
                     isPressed = false;
-                    stopRecordingAnimation();
-                    if (callback != null) {
-                        callback.onRecordingEnd();
-                    }
+                    performClick();
+                }
+                return true;
+
+            case MotionEvent.ACTION_CANCEL:
+                isPressed = false;
                 return true;
         }
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean performClick() {
+        super.performClick();
+        if (isRecording) {
+            stopRecordingAnimation();
+            if (callback != null) {
+                callback.onRecordingEnd();
+            }
+        } else {
+            startRecordingAnimation();
+            if (callback != null) {
+                callback.onRecordingStart();
+            }
+        }
+        return true;
     }
 
     private void startRecordingAnimation() {
@@ -206,6 +218,14 @@ public class AudioButtonView extends View {
     public void setRecordingText(String text) {
         this.recordingText = text;
         invalidate();
+    }
+
+    public void setRecordingState(boolean recording) {
+        if (recording && !isRecording) {
+            startRecordingAnimation();
+        } else if (!recording && isRecording) {
+            stopRecordingAnimation();
+        }
     }
 
     @Override

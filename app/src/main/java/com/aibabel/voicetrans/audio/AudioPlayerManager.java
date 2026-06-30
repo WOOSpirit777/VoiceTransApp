@@ -1,4 +1,4 @@
-package com.example.voicetrans.audio;
+package com.aibabel.voicetrans.audio;
 
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
@@ -7,7 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import com.example.voicetrans.util.Constants;
+import com.aibabel.voicetrans.util.Constants;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -1,40 +1,41 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
+    android:background="@color/bg_primary"
     android:orientation="vertical">
 
     <!-- 标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="#2196F3"
+        android:background="@color/status_bar_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp">
 
         <ImageButton
             android:id="@+id/btnBack"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
             android:contentDescription="返回"
-            app:tint="@android:color/white"
-            xmlns:app="http://schemas.android.com/apk/res-auto" />
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="@color/text_secondary" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
             android:text="设置"
-            android:textColor="@android:color/white"
-            android:textSize="20sp"
+            android:textColor="@color/text_secondary"
+            android:textSize="18sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 设置项列表 -->
+    <!-- 设置内容 -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -46,43 +47,62 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- 自动播放翻译音频 -->
-            <LinearLayout
+            <!-- ========== 音频设置组 ========== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:layout_marginStart="4dp"
+                android:text="音频设置"
+                android:textColor="@color/text_hint"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
-                android:elevation="2dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="16dp">
+                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="@color/bg_surface"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
 
-                    <TextView
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="自动播放翻译音频"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="翻译完成后自动播放服务端返回的音频"
+                            android:textColor="@color/text_hint"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/switchAutoPlay"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="自动播放翻译音频"
-                        android:textColor="#212121"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="翻译完成后自动播放服务端返回的音频"
-                        android:textColor="#757575"
-                        android:textSize="13sp" />
+                        android:thumbTint="@color/accent_teal"
+                        android:trackTint="@color/bg_input" />
                 </LinearLayout>
-
-                <Switch
-                    android:id="@+id/switchAutoPlay"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
+            </androidx.cardview.widget.CardView>
 
         </LinearLayout>
     </ScrollView>

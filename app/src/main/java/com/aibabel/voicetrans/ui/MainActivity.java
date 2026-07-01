@@ -49,7 +49,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvStatus;
     private TextView tvRecordHint;
     private Button btnChinese;
-    private Button btnEnglish;
     private Button btnIndonesian;
     private ImageButton btnSettings;
     private RecyclerView rvChat;
@@ -73,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isDualScreen = false;
 
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable translateFinishTimeoutRunnable;
 
     @Override
     protected void onResume() {
@@ -201,7 +201,6 @@ public class MainActivity extends AppCompatActivity {
         tvStatus = findViewById(R.id.tvStatus);
         tvRecordHint = findViewById(R.id.tvRecordHint);
         btnChinese = findViewById(R.id.btnChinese);
-        btnEnglish = findViewById(R.id.btnEnglish);
         btnIndonesian = findViewById(R.id.btnIndonesian);
         btnSettings = findViewById(R.id.btnSettings);
         rvChat = findViewById(R.id.rvChat);
@@ -227,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateLanguageInManager() {
-        String targetLang = Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_EN : Constants.LANG_ZH;
+        String targetLang = Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_ID : Constants.LANG_ZH;
         webSocketManager.setLanguage(currentLang, targetLang);
     }
 
@@ -235,14 +234,6 @@ public class MainActivity extends AppCompatActivity {
         btnChinese.setOnClickListener(v -> {
             if (!isRecording) {
                 currentLang = Constants.LANG_ZH;
-                updateLanguageInManager();
-                updateLanguageButtons(currentLang);
-            }
-        });
-
-        btnEnglish.setOnClickListener(v -> {
-            if (!isRecording) {
-                currentLang = Constants.LANG_EN;
                 updateLanguageInManager();
                 updateLanguageButtons(currentLang);
             }
@@ -273,20 +264,42 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        chatAdapter.setOnItemClickListener(message -> {
-            Log.e(TAG, "Message clicked: " + message.getId());
+        chatAdapter.setOnItemClickListener(new ChatAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(ChatMessage message) {
+                Log.e(TAG, "Message clicked: " + message.getId());
+            }
+
+            @Override
+            public void onSourceAudioClick(ChatMessage message) {
+                byte[] audioData = message.getSourceAudioData();
+                if (audioData != null && audioData.length > 0) {
+                    audioPlayerManager.playPcm(audioData);
+                    Toast.makeText(MainActivity.this, "正在播放原文音频", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "无原文音频数据", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onTargetAudioClick(ChatMessage message) {
+                byte[] audioData = message.getTtsAudioData();
+                if (audioData != null && audioData.length > 0) {
+                    audioPlayerManager.playPcm(audioData);
+                    Toast.makeText(MainActivity.this, "正在播放翻译音频", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "无翻译音频数据", Toast.LENGTH_SHORT).show();
+                }
+            }
         });
     }
 
     private void updateLanguageButtons(String selectedLang) {
         btnChinese.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.gray));
-        btnEnglish.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.gray));
         btnIndonesian.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.gray));
 
         if (Constants.LANG_ZH.equals(selectedLang)) {
             btnChinese.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.primary));
-        } else if (Constants.LANG_EN.equals(selectedLang)) {
-            btnEnglish.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.primary));
         } else if (Constants.LANG_ID.equals(selectedLang)) {
             btnIndonesian.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.primary));
         }
@@ -345,12 +358,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecording() {
+        if (audioPlayerManager.isPlaying()) {
+            audioPlayerManager.stop();
+            Log.i(TAG, "Stopped TTS playback to start recording");
+        }
+
         isRecording = true;
         isProcessing.set(true);
 
         tvRecordHint.setText("正在录音...");
         btnChinese.setEnabled(false);
-        btnEnglish.setEnabled(false);
         btnIndonesian.setEnabled(false);
 
         if (!webSocketManager.isConnected()) {
@@ -364,7 +381,7 @@ public class MainActivity extends AppCompatActivity {
 
         currentMessage = new ChatMessage();
         currentMessage.setSourceLang(currentLang);
-        currentMessage.setTargetLang(Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_EN : Constants.LANG_ZH);
+        currentMessage.setTargetLang(Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_ID : Constants.LANG_ZH);
         chatAdapter.addMessage(currentMessage);
         scrollToBottom();
 
@@ -380,13 +397,20 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.post(() -> {
             tvRecordHint.setText("正在识别...");
             btnChinese.setEnabled(true);
-            btnEnglish.setEnabled(true);
             btnIndonesian.setEnabled(true);
         });
 
         audioRecorderManager.stopRecording();
 
         webSocketManager.sendFinish();
+
+        translateFinishTimeoutRunnable = () -> {
+            Log.e(TAG, "Translate finish timeout after " + Constants.TRANSLATE_FINISH_TIMEOUT_MS + "ms, disconnecting");
+            isProcessing.set(false);
+            tvRecordHint.setText("翻译超时");
+            webSocketManager.disconnect();
+        };
+        mainHandler.postDelayed(translateFinishTimeoutRunnable, Constants.TRANSLATE_FINISH_TIMEOUT_MS);
     }
 
     private WebSocketManager.WebSocketCallback webSocketCallback = new WebSocketManager.WebSocketCallback() {
@@ -441,9 +465,14 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onError(String error) {
             mainHandler.post(() -> {
-                updateStatus("错误: " + error, 0xFFFFEBEE, 0xFFC62828);
-                Toast.makeText(MainActivity.this, "错误: " + error, Toast.LENGTH_SHORT).show();
+                updateStatus("连接错误: " + error, 0xFFFFEBEE, 0xFFC62828);
+                Toast.makeText(MainActivity.this, "连接错误: " + error, Toast.LENGTH_SHORT).show();
+                isRecording = false;
                 isProcessing.set(false);
+                tvRecordHint.setText("连接失败，点击按钮重试");
+                btnChinese.setEnabled(true);
+                btnIndonesian.setEnabled(true);
+                audioButtonView.setRecordingState(false);
             });
         }
     };
@@ -496,6 +525,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleTranslateFinish() {
         Log.e(TAG, "Translate finish received");
+
+        if (translateFinishTimeoutRunnable != null) {
+            mainHandler.removeCallbacks(translateFinishTimeoutRunnable);
+            translateFinishTimeoutRunnable = null;
+        }
+
         tvRecordHint.setText("翻译完成");
         Toast.makeText(this, "翻译完成", Toast.LENGTH_SHORT).show();
 
@@ -510,7 +545,11 @@ public class MainActivity extends AppCompatActivity {
         synchronized (ttsAudioBuffer) {
             byte[] audioData = ttsAudioBuffer.toByteArray();
             if (audioData.length > 0) {
-                // 保存TTS音频到文件
+                if (currentMessage != null) {
+                    currentMessage.setTtsAudioData(audioData);
+                    chatAdapter.updateLastMessage(currentMessage);
+                }
+
                 saveTtsAudioToFile(audioData);
 
                 // 根据设置判断是否自动播放
@@ -544,7 +583,7 @@ public class MainActivity extends AppCompatActivity {
                     android.os.Environment.DIRECTORY_MUSIC).mkdirs();
 
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            String targetLang = Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_EN : Constants.LANG_ZH;
+            String targetLang = Constants.LANG_ZH.equals(currentLang) ? Constants.LANG_ID : Constants.LANG_ZH;
             String fileName = "TTS_" + currentLang + "_to_" + targetLang + "_" + timeStamp + ".pcm";
             File file = new File(
                     android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC),
@@ -576,6 +615,10 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onRecordingStop(byte[] fullData) {
             Log.e(TAG, "Recording stopped, total: " + (fullData != null ? fullData.length : 0) + " bytes");
+            if (currentMessage != null && fullData != null && fullData.length > 0) {
+                currentMessage.setSourceAudioData(fullData);
+                chatAdapter.updateLastMessage(currentMessage);
+            }
         }
 
         @Override
@@ -586,7 +629,6 @@ public class MainActivity extends AppCompatActivity {
                 isProcessing.set(false);
                 tvRecordHint.setText("点击按钮开始说话");
                 btnChinese.setEnabled(true);
-                btnEnglish.setEnabled(true);
                 btnIndonesian.setEnabled(true);
             });
         }

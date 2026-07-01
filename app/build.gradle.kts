@@ -1,3 +1,6 @@
+import org.gradle.kotlin.dsl.debugApi
+import org.gradle.kotlin.dsl.releaseApi
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")

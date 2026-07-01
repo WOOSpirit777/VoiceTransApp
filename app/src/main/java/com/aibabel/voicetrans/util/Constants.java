@@ -42,4 +42,6 @@ public class Constants {
     public static final String CLASS_SOURCE = "source";
     public static final String CLASS_TARGET = "target";
     public static final String CLASS_TTS = "tts";
+    // translate finish 超时时间（毫秒），默认30秒
+    public static final long TRANSLATE_FINISH_TIMEOUT_MS = 30000;
 }

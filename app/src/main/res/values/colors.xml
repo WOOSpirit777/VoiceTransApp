@@ -1,12 +1,39 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#2196F3</color>
-    <color name="primary_dark">#1976D2</color>
-    <color name="accent">#FF5722</color>
+    <!-- 深色主题 - 主色 -->
+    <color name="bg_primary">#1A1A2E</color>
+    <color name="bg_secondary">#16213E</color>
+    <color name="bg_card">#0F3460</color>
+    <color name="bg_surface">#252547</color>
+    <color name="bg_input">#1E1E3F</color>
+    <color name="bg_bottom_bar">#0F0F2D</color>
+
+    <!-- 功能色 -->
+    <color name="lang_selected">#E94560</color>
+    <color name="lang_default">#8B2252</color>
+    <color name="accent_teal">#0AD1C8</color>
+    <color name="accent_gold">#FFE6B8</color>
+    <color name="status_bar_bg">#0F0F2D</color>
+
+    <!-- 文字色 -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#FFE6B8</color>
+    <color name="text_hint">#8899AA</color>
+    <color name="text_status">#FF6B6B</color>
+
+    <!-- 边框/分割线 -->
+    <color name="divider">#2A2A4A</color>
+    <color name="border_subtle">#3A3A5A</color>
+    <color name="dashed_border">#4A4A6A</color>
+
+    <!-- 兼容旧色名 -->
+    <color name="primary">#E94560</color>
+    <color name="primary_dark">#C13050</color>
+    <color name="accent">#0AD1C8</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="gray_light">#F5F5F5</color>
     <color name="gray">#9E9E9E</color>
-    <color name="text_primary">#212121</color>
-    <color name="text_secondary">#757575</color>
+    <color name="text_color_primary">#212121</color>
+    <color name="text_secondary_old">#757575</color>
 </resources>

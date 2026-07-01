@@ -7,6 +7,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.aibabel.voicetrans.R;
@@ -18,9 +19,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * 聊天消息适配器
- */
 public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder> {
 
     private List<ChatMessage> messages = new ArrayList<>();
@@ -29,6 +27,8 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
 
     public interface OnItemClickListener {
         void onItemClick(ChatMessage message);
+        void onSourceAudioClick(ChatMessage message);
+        void onTargetAudioClick(ChatMessage message);
     }
 
     public void setOnItemClickListener(OnItemClickListener listener) {
@@ -89,21 +89,27 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
     }
 
     class ChatViewHolder extends RecyclerView.ViewHolder {
+        private View layoutSource;
+        private View layoutTarget;
         private TextView tvSourceLang;
         private TextView tvSourceText;
         private TextView tvSourceTime;
+        private ImageView ivPlaySource;
         private TextView tvTargetLang;
         private TextView tvTargetText;
-        private ImageView ivPlayAudio;
+        private ImageView ivPlayTarget;
 
         public ChatViewHolder(@NonNull View itemView) {
             super(itemView);
+            layoutSource = itemView.findViewById(R.id.layoutSource);
+            layoutTarget = itemView.findViewById(R.id.layoutTarget);
             tvSourceLang = itemView.findViewById(R.id.tvSourceLang);
             tvSourceText = itemView.findViewById(R.id.tvSourceText);
             tvSourceTime = itemView.findViewById(R.id.tvSourceTime);
+            ivPlaySource = itemView.findViewById(R.id.ivPlaySource);
             tvTargetLang = itemView.findViewById(R.id.tvTargetLang);
             tvTargetText = itemView.findViewById(R.id.tvTargetText);
-            ivPlayAudio = itemView.findViewById(R.id.ivPlayAudio);
+            ivPlayTarget = itemView.findViewById(R.id.ivPlayTarget);
 
             itemView.setOnClickListener(v -> {
                 int position = getAdapterPosition();
@@ -111,29 +117,52 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
                     listener.onItemClick(messages.get(position));
                 }
             });
+
+            layoutSource.setOnClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION && listener != null) {
+                    listener.onSourceAudioClick(messages.get(position));
+                }
+            });
+
+            layoutTarget.setOnClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION && listener != null) {
+                    listener.onTargetAudioClick(messages.get(position));
+                }
+            });
         }
 
         public void bind(ChatMessage message) {
-            // 源语言
             tvSourceLang.setText(message.getSourceLangDisplay());
             tvSourceText.setText(message.getSourceText() != null ? message.getSourceText() : "等待识别...");
             tvSourceTime.setText(timeFormat.format(new Date(message.getTimestamp())));
 
-            // 目标语言
             tvTargetLang.setText(message.getTargetLangDisplay());
             tvTargetText.setText(message.getTargetText() != null ? message.getTargetText() : "等待翻译...");
 
-            // 设置文本颜色表示加载状态
-            if (message.getSourceText() == null) {
-                tvSourceText.setTextColor(0xFF9E9E9E);
+            if (message.getSourceAudioData() != null && message.getSourceAudioData().length > 0) {
+                ivPlaySource.setVisibility(View.VISIBLE);
             } else {
-                tvSourceText.setTextColor(0xFF212121);
+                ivPlaySource.setVisibility(View.GONE);
+            }
+
+            if (message.getTtsAudioData() != null && message.getTtsAudioData().length > 0) {
+                ivPlayTarget.setVisibility(View.VISIBLE);
+            } else {
+                ivPlayTarget.setVisibility(View.GONE);
+            }
+
+            if (message.getSourceText() == null) {
+                tvSourceText.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.text_hint));
+            } else {
+                tvSourceText.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.text_primary));
             }
 
             if (message.getTargetText() == null) {
-                tvTargetText.setTextColor(0xFF9E9E9E);
+                tvTargetText.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.text_hint));
             } else {
-                tvTargetText.setTextColor(0xFF424242);
+                tvTargetText.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.text_secondary));
             }
         }
     }

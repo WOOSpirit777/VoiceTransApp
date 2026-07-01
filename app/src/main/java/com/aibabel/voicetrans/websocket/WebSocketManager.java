@@ -28,8 +28,12 @@ public class WebSocketManager {
     private Gson gson;
 
     private String langSource = Constants.LANG_ZH;
-    private String langTarget = Constants.LANG_EN;
+    private String langTarget = Constants.LANG_ID;
     private boolean isConnected = false;
+    private boolean isManualDisconnect = false;
+    private int reconnectAttempts = 0;
+    private static final int MAX_RECONNECT_ATTEMPTS = 5;
+    private Runnable reconnectRunnable;
 
     private WebSocketCallback callback;
     private Handler mainHandler;
@@ -48,8 +52,8 @@ public class WebSocketManager {
         mainHandler = new Handler(Looper.getMainLooper());
 
         client = new OkHttpClient.Builder()
-                .readTimeout(0, TimeUnit.MILLISECONDS)
-                .writeTimeout(0, TimeUnit.MILLISECONDS)
+                .readTimeout(300, TimeUnit.SECONDS)
+                .writeTimeout(300, TimeUnit.SECONDS)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
                 .build();
@@ -90,6 +94,7 @@ public class WebSocketManager {
             return;
         }
 
+        isManualDisconnect = false;
         Log.i(TAG, "Connecting to: " + Constants.WS_URL);
         Log.i(TAG, "langSource: " + langSource + ", langTarget: " + langTarget);
 
@@ -110,6 +115,7 @@ public class WebSocketManager {
                 Log.e(TAG, "WebSocket connected successfully!");
                 Log.e(TAG, "Response code: " + response.code());
                 isConnected = true;
+                reconnectAttempts = 0;
 
                 mainHandler.post(() -> {
                     if (callback != null) {
@@ -254,6 +260,12 @@ public class WebSocketManager {
     }
 
     public void disconnect() {
+        isManualDisconnect = true;
+        if (reconnectRunnable != null) {
+            mainHandler.removeCallbacks(reconnectRunnable);
+            reconnectRunnable = null;
+        }
+        reconnectAttempts = 0;
         if (webSocket != null) {
             isConnected = false;
             webSocket.close(1000, "User disconnect");
@@ -262,6 +274,6 @@ public class WebSocketManager {
 
     public void reconnect() {
         disconnect();
-        connect();
+        mainHandler.postDelayed(this::connect, 500);
     }
 }

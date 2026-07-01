@@ -4,8 +4,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@color/bg_surface"
     app:cardCornerRadius="12dp"
-    app:cardElevation="2dp">
+    app:cardElevation="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -15,20 +16,24 @@
 
         <!-- 源语言标签 -->
         <LinearLayout
+            android:id="@+id/layoutSource"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground">
 
             <TextView
                 android:id="@+id/tvSourceLang"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#E3F2FD"
+                android:background="@color/lang_default"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="2dp"
                 android:text="中文"
-                android:textColor="#1976D2"
+                android:textColor="@color/text_primary"
                 android:textSize="10sp" />
 
             <View
@@ -36,12 +41,21 @@
                 android:layout_height="1dp"
                 android:layout_weight="1" />
 
+            <ImageView
+                android:id="@+id/ivPlaySource"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/ic_media_play"
+                app:tint="@color/accent_teal"
+                android:visibility="gone"
+                android:layout_marginEnd="8dp" />
+
             <TextView
                 android:id="@+id/tvSourceTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="12:30"
-                android:textColor="#9E9E9E"
+                android:textColor="@color/text_hint"
                 android:textSize="10sp" />
         </LinearLayout>
 
@@ -52,7 +66,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="你好世界"
-            android:textColor="#212121"
+            android:textColor="@color/text_primary"
             android:textSize="16sp" />
 
         <!-- 分隔线 -->
@@ -60,24 +74,28 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginVertical="12dp"
-            android:background="#E0E0E0" />
+            android:background="@color/divider" />
 
         <!-- 目标语言标签 -->
         <LinearLayout
+            android:id="@+id/layoutTarget"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground">
 
             <TextView
                 android:id="@+id/tvTargetLang"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#FFF3E0"
+                android:background="@color/lang_selected"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="2dp"
                 android:text="英文"
-                android:textColor="#F57C00"
+                android:textColor="@color/text_primary"
                 android:textSize="10sp" />
 
             <View
@@ -86,10 +104,11 @@
                 android:layout_weight="1" />
 
             <ImageView
-                android:id="@+id/ivPlayAudio"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:id="@+id/ivPlayTarget"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:src="@android:drawable/ic_media_play"
+                app:tint="@color/accent_teal"
                 android:visibility="gone" />
         </LinearLayout>
 
@@ -100,7 +119,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Hello World"
-            android:textColor="#424242"
+            android:textColor="@color/text_secondary"
             android:textSize="16sp" />
 
     </LinearLayout>

@@ -12,6 +12,8 @@ public class ChatMessage {
     private long timestamp;
     private boolean isSending;      // 是否正在发送
     private boolean isError;        // 是否错误
+    private byte[] sourceAudioData; // 源语言录音音频数据
+    private byte[] ttsAudioData;    // TTS音频数据
 
     public ChatMessage() {
         this.id = String.valueOf(System.currentTimeMillis());
@@ -90,10 +92,30 @@ public class ChatMessage {
     }
 
     public String getSourceLangDisplay() {
-        return "zh".equals(sourceLang) ? "中文" : "英文";
+        if ("zh".equals(sourceLang)) return "中文";
+        if ("id".equals(sourceLang)) return "印尼语";
+        return sourceLang;
     }
 
     public String getTargetLangDisplay() {
-        return "zh".equals(sourceLang) ? "英文" : "中文";
+        if ("zh".equals(targetLang)) return "中文";
+        if ("id".equals(targetLang)) return "印尼语";
+        return targetLang;
+    }
+
+    public byte[] getSourceAudioData() {
+        return sourceAudioData;
+    }
+
+    public void setSourceAudioData(byte[] sourceAudioData) {
+        this.sourceAudioData = sourceAudioData;
+    }
+
+    public byte[] getTtsAudioData() {
+        return ttsAudioData;
+    }
+
+    public void setTtsAudioData(byte[] ttsAudioData) {
+        this.ttsAudioData = ttsAudioData;
     }
 }

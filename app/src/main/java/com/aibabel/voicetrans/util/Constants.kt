@@ -1,0 +1,38 @@
+package com.aibabel.voicetrans.util
+
+object Constants {
+    const val WS_URL_CN = "ws://192.168.1.226:18050/speech/mode/ws_s2s"
+    const val WS_URL_COM = "wss://joner-trans.aibabel.com/speech/mode/ws"
+    
+    const val WS_URL = WS_URL_CN
+
+    const val ACCESS_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODI0MzgxNDYsInN1YiI6Ikw2MDg3WUowMDAwMDAxNyJ9.XK0KfE3V9mDc1d8IVQ13DCFkTLjzOob9SGjJN1nXlk97JVRbdMFq2janlUt_5iT24raenigPWSw-dE6VwD_FaA"
+
+    const val LANG_ZH = "zh"
+    const val LANG_EN = "en"
+    const val LANG_ID = "id"
+
+    const val SAMPLE_RATE = 16000
+    const val CHANNEL_CONFIG = 1
+    const val AUDIO_FORMAT = 16
+    const val CHUNK_SIZE = 3200
+
+    const val CMD_FINISH = "finish"
+    const val CMD_CLOSE = "close"
+
+    const val RESP_PROCESSING_COMPLETED = "Processing completed and result sent"
+    const val RESP_CONNECTION_CLOSING = "Connection closing"
+    const val RESP_TRANSLATE_FINISH = "translate finish"
+
+    const val MSG_TYPE_TEXT = 1
+    const val MSG_TYPE_BINARY = 2
+
+    const val TYPE_TEXT = "text"
+    const val TYPE_ERROR = "error"
+
+    const val CLASS_SOURCE = "source"
+    const val CLASS_TARGET = "target"
+    const val CLASS_TTS = "tts"
+
+    const val TRANSLATE_FINISH_TIMEOUT_MS = 30000L
+}

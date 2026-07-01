@@ -11,8 +11,10 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
+import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -45,6 +47,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSettings: ImageButton
     private lateinit var rvChat: RecyclerView
     private lateinit var audioButtonView: AudioButtonView
+    private lateinit var svMainDisplay: ScrollView
+    private lateinit var tvMainDisplayLang: TextView
+    private lateinit var tvMainDisplayText: TextView
 
     private lateinit var chatAdapter: ChatAdapter
 
@@ -62,6 +67,38 @@ class MainActivity : AppCompatActivity() {
     private var secondaryDisplay: Display? = null
     private var isDualScreen = false
 
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            Log.e(TAG, "Display added: $displayId")
+            val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
+            val display = displayManager.getDisplay(displayId)
+            if (display != null && display.isValid) {
+                val presentationDisplays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
+                if (presentationDisplays.isNotEmpty() && presentationDisplays[0].displayId == displayId) {
+                    secondaryDisplay = display
+                    isDualScreen = true
+                    showPresentation()
+                }
+            }
+        }
+
+        override fun onDisplayRemoved(displayId: Int) {
+            Log.e(TAG, "Display removed: $displayId")
+            if (secondaryDisplay?.displayId == displayId) {
+                if (presentation?.isShowing == true) {
+                    presentation?.dismiss()
+                }
+                presentation = null
+                secondaryDisplay = null
+                isDualScreen = false
+            }
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            Log.e(TAG, "Display changed: $displayId")
+        }
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var translateFinishTimeoutRunnable: Runnable? = null
 
@@ -69,11 +106,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateMainDisplayLanguage()
         if (isDualScreen && secondaryDisplay != null) {
-            if (presentation == null || !presentation!!.isShowing) {
-                presentation = SecondaryPresentation(this, secondaryDisplay!!)
-                presentation!!.show()
-            }
+            showPresentation()
         }
     }
 
@@ -90,6 +125,8 @@ class MainActivity : AppCompatActivity() {
         if (presentation != null && presentation!!.isShowing) {
             presentation!!.dismiss()
         }
+        val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        displayManager.unregisterDisplayListener(displayListener)
         webSocketManager.disconnect()
         audioRecorderManager.release()
         audioPlayerManager.release()
@@ -97,29 +134,55 @@ class MainActivity : AppCompatActivity() {
 
     private fun detectAndInitSecondaryScreen() {
         val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
-        val displays = displayManager.displays
 
-        Log.e(TAG, "检测到 " + displays.size + " 个屏幕")
-
-        for (i in 1 until displays.size) {
-            if (displays[i].isValid) {
-                secondaryDisplay = displays[i]
-                isDualScreen = true
-
-                val metrics = DisplayMetrics()
-                secondaryDisplay!!.getMetrics(metrics)
-                Log.e(TAG, "副屏: " + secondaryDisplay!!.name +
-                        ", 分辨率: " + metrics.widthPixels + "x" + metrics.heightPixels)
-                break
-            }
+        val allDisplays = displayManager.displays
+        Log.e(TAG, "检测到 " + allDisplays.size + " 个屏幕")
+        for (d in allDisplays) {
+            val metrics = DisplayMetrics()
+            d.getMetrics(metrics)
+            Log.e(TAG, "  屏幕: name=" + d.name +
+                    ", displayId=" + d.displayId +
+                    ", valid=" + d.isValid +
+                    ", size=" + metrics.widthPixels + "x" + metrics.heightPixels)
         }
 
-        if (isDualScreen && secondaryDisplay != null) {
-            presentation = SecondaryPresentation(this, secondaryDisplay!!)
-            presentation!!.show()
-            Log.e(TAG, "双屏模式已启用")
+        val presentationDisplays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
+        Log.e(TAG, "Presentation 类屏幕: " + presentationDisplays.size + " 个")
+        for (d in presentationDisplays) {
+            val metrics = DisplayMetrics()
+            d.getMetrics(metrics)
+            Log.e(TAG, "  副屏: name=" + d.name +
+                    ", displayId=" + d.displayId +
+                    ", size=" + metrics.widthPixels + "x" + metrics.heightPixels)
+        }
+
+        if (presentationDisplays.isNotEmpty() && presentationDisplays[0].isValid) {
+            secondaryDisplay = presentationDisplays[0]
+            isDualScreen = true
+
+            val metrics = DisplayMetrics()
+            secondaryDisplay!!.getMetrics(metrics)
+            Log.e(TAG, "选中副屏: " + secondaryDisplay!!.name +
+                    ", 分辨率: " + metrics.widthPixels + "x" + metrics.heightPixels)
+
+            showPresentation()
         } else {
-            Log.e(TAG, "仅检测到单屏")
+            Log.e(TAG, "未找到可用副屏 (Presentation 类)")
+        }
+    }
+
+    private fun showPresentation() {
+        try {
+            if (presentation == null && secondaryDisplay != null) {
+                presentation = SecondaryPresentation(this, secondaryDisplay!!)
+            }
+            if (presentation != null && !presentation!!.isShowing) {
+                presentation!!.show()
+                Log.e(TAG, "双屏模式已启用 - Presentation show() 成功")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "显示副屏失败: " + e.message)
+            e.printStackTrace()
         }
     }
 
@@ -139,9 +202,51 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSecondScreen(sourceText: String?, targetText: String?, sourceLang: String?, targetLang: String?) {
         if (isDualScreen && presentation != null) {
-            presentation!!.updateContent(targetText, sourceLang, targetLang)
-            Log.e(TAG, "Update second screen: $targetText")
+            val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+            presentation!!.updateContent(sourceText, targetText, sourceLang, targetLang, mode)
+            Log.e(TAG, "Update second screen mode=$mode: $targetText")
         }
+    }
+
+    private fun updateMainDisplayLanguage() {
+        // 主屏显示的语言与副屏相反
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        val mainLangLabel = if (secondaryMode == SettingsActivity.MODE_CHINESE) {
+            "印尼语"
+        } else {
+            "中文"
+        }
+        tvMainDisplayLang.text = mainLangLabel
+    }
+
+    private fun updateMainDisplay(sourceText: String?, targetText: String?, sourceLang: String?, targetLang: String?) {
+        // 主屏显示的语言与副屏相反
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        // 副屏显示中文 -> 主屏显示印尼语
+        // 副屏显示印尼语 -> 主屏显示中文
+        val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+
+        val textToShow = if (mainShowChinese) {
+            // 显示中文
+            if (sourceLang == "zh") sourceText ?: "等待识别..."
+            else if (targetLang == "zh") targetText ?: "等待翻译..."
+            else "等待中文内容..."
+        } else {
+            // 显示印尼语
+            if (sourceLang == "id") sourceText ?: "等待识别..."
+            else if (targetLang == "id") targetText ?: "等待翻译..."
+            else "等待印尼语内容..."
+        }
+
+        tvMainDisplayText.text = textToShow
+
+        svMainDisplay.post {
+            svMainDisplay.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+
+    private fun clearMainDisplay() {
+        tvMainDisplayText.text = "等待翻译..."
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -156,8 +261,14 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
         checkPermissions()
 
-        detectAndInitSecondaryScreen()
         turnOnSubScreen()
+
+        val displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        displayManager.registerDisplayListener(displayListener, mainHandler)
+
+        mainHandler.postDelayed({
+            detectAndInitSecondaryScreen()
+        }, 500)
     }
 
     private fun initViews() {
@@ -168,12 +279,16 @@ class MainActivity : AppCompatActivity() {
         btnSettings = findViewById(R.id.btnSettings)
         rvChat = findViewById(R.id.rvChat)
         audioButtonView = findViewById(R.id.audioButtonView)
+        svMainDisplay = findViewById(R.id.svMainDisplay)
+        tvMainDisplayLang = findViewById(R.id.tvMainDisplayLang)
+        tvMainDisplayText = findViewById(R.id.tvMainDisplayText)
 
         chatAdapter = ChatAdapter()
         rvChat.layoutManager = LinearLayoutManager(this)
         rvChat.adapter = chatAdapter
 
         updateLanguageButtons(Constants.LANG_ZH)
+        updateMainDisplayLanguage()
     }
 
     private fun initManagers() {
@@ -309,8 +424,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun connectWebSocket() {
-        updateStatus("连接中...", 0xFFFFF3E0.toInt(), 0xFFE65100.toInt())
-        webSocketManager.connect()
+//        updateStatus("连接中...", 0xFFFFF3E0.toInt(), 0xFFE65100.toInt())
+//        webSocketManager.connect()
     }
 
     private fun startRecording() {
@@ -325,6 +440,8 @@ class MainActivity : AppCompatActivity() {
         tvRecordHint.text = "正在录音..."
         btnChinese.isEnabled = false
         btnIndonesian.isEnabled = false
+
+        clearMainDisplay()
 
         if (!webSocketManager.isConnected()) {
             updateStatus("连接中...", 0xFFFFF3E0.toInt(), 0xFFE65100.toInt())
@@ -363,7 +480,7 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Translate finish timeout after ${Constants.TRANSLATE_FINISH_TIMEOUT_MS}ms, disconnecting")
             isProcessing.set(false)
             tvRecordHint.text = "翻译超时"
-            webSocketManager.disconnect()
+//            webSocketManager.disconnect()
         }
         mainHandler.postDelayed(translateFinishTimeoutRunnable!!, Constants.TRANSLATE_FINISH_TIMEOUT_MS)
     }
@@ -434,10 +551,22 @@ class MainActivity : AppCompatActivity() {
                 if (result.isSource) {
                     val existingSource = currentMessage!!.sourceText ?: ""
                     currentMessage!!.sourceText = existingSource + result.text
+                    updateMainDisplay(
+                        currentMessage!!.sourceText,
+                        currentMessage!!.targetText,
+                        currentMessage!!.sourceLang,
+                        currentMessage!!.targetLang
+                    )
                 } else if (result.isTarget) {
                     val existingTarget = currentMessage!!.targetText ?: ""
                     currentMessage!!.targetText = existingTarget + result.text
                     updateSecondScreen(
+                        currentMessage!!.sourceText,
+                        currentMessage!!.targetText,
+                        currentMessage!!.sourceLang,
+                        currentMessage!!.targetLang
+                    )
+                    updateMainDisplay(
                         currentMessage!!.sourceText,
                         currentMessage!!.targetText,
                         currentMessage!!.sourceLang,

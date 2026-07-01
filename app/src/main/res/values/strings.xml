@@ -7,4 +7,26 @@
     <string name="disconnected">未连接</string>
     <string name="connecting">连接中...</string>
     <string name="error">发生错误</string>
+    <string name="settings">设置</string>
+    <string name="back">返回</string>
+    <string name="audio_settings">音频设置</string>
+    <string name="auto_play_tts_title">自动播放翻译音频</string>
+    <string name="auto_play_tts_desc">翻译完成后自动播放服务端返回的音频</string>
+    <string name="auto_play_enabled">已开启自动播放</string>
+    <string name="auto_play_disabled">已关闭自动播放</string>
+    <string name="translation_result">翻译结果</string>
+    <string name="waiting_for_translation">等待翻译...</string>
+    <string name="secondary_screen_settings">副屏显示设置</string>
+    <string name="secondary_screen_mode">显示内容</string>
+    <string name="secondary_screen_mode_indonesian">显示印尼语</string>
+    <string name="secondary_screen_mode_chinese">显示中文</string>
+    <string name="about_settings">关于</string>
+    <string name="check_update">检查更新</string>
+    <string name="current_version">当前版本</string>
+    <string name="has_new_version">有新版本</string>
+    <string name="update">更新</string>
+    <string name="cancel">取消</string>
+    <string name="downloading">正在下载...</string>
+    <string name="download_complete">下载完成</string>
+    <string name="no_new_version">已是最新版本</string>
 </resources>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tool="http://schemas.android.com/tools">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/bg_no_data"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/iv_no_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/bg_no_data"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/tv_no_data"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nothing_here"
+            android:textColor="#666666"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:layout_marginTop="23dp"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/iv_no_date" />
+
+      <LinearLayout
+          android:id="@+id/ll_retry"
+          app:layout_constraintStart_toStartOf="parent"
+          app:layout_constraintEnd_toEndOf="parent"
+          app:layout_constraintTop_toBottomOf="@+id/tv_no_data"
+          android:layout_width="match_parent"
+          android:gravity="center"
+          android:layout_marginTop="10dp"
+          android:layout_height="wrap_content">
+          <TextView
+              android:id="@+id/tv_mall"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+
+              android:paddingHorizontal="28dp"
+              android:paddingVertical="11dp"
+              android:background="@drawable/bg_848499_c25"
+              android:gravity="center"
+              android:text="@string/retry"
+              android:textColor="#666666"
+              android:fontFamily="sans-serif-medium"
+              android:textSize="16sp"
+              app:layout_constraintStart_toStartOf="parent"
+              />
+          <TextView
+              android:id="@+id/tv_setting_net"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:paddingHorizontal="28dp"
+              android:paddingVertical="11dp"
+              android:background="@drawable/bg_848499_c25"
+              android:gravity="center"
+              android:text="@string/net_set"
+              android:textColor="#666666"
+              android:fontFamily="sans-serif-medium"
+              android:textSize="16sp"
+              android:layout_marginStart="20dp"
+               />
+      </LinearLayout>
+
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

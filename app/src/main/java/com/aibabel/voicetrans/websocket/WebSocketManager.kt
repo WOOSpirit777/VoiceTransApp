@@ -11,6 +11,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okhttp3.logging.HttpLoggingInterceptor
 import okio.ByteString
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -43,10 +44,16 @@ class WebSocketManager private constructor() {
         gson = Gson()
         mainHandler = Handler(Looper.getMainLooper())
 
+        val loggingInterceptor = HttpLoggingInterceptor { message ->
+            Log.i(TAG, "OkHttp: $message")
+        }
+        loggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+
         client = OkHttpClient.Builder()
             .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(300, TimeUnit.SECONDS)
-            .connectTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(300, TimeUnit.SECONDS)
+            .addInterceptor(loggingInterceptor)
             .retryOnConnectionFailure(true)
             .build()
     }
@@ -149,9 +156,13 @@ class WebSocketManager private constructor() {
                 }
 
                 isConnected = false
-
-                mainHandler.post {
-                    callback?.onError(t.message ?: "Unknown error")
+                reconnectAttempts++
+                if (reconnectAttempts <= 3) {
+                    reconnect()
+                } else {
+                    mainHandler.post {
+                        callback?.onError(t.message ?: "Unknown error")
+                    }
                 }
             }
         })
@@ -226,7 +237,6 @@ class WebSocketManager private constructor() {
             mainHandler.removeCallbacks(it)
             reconnectRunnable = null
         }
-        reconnectAttempts = 0
         webSocket?.let {
             isConnected = false
             it.close(1000, "User disconnect")

@@ -94,15 +94,56 @@
             app:cornerRadius="21dp" />
     </LinearLayout>
 
-    <!-- ========== 对话列表 ========== -->
+    <!-- ========== 对话列表（保留，默认隐藏） ========== -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvChat"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:clipToPadding="false"
         android:padding="16dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/bottomContainer"
         app:layout_constraintTop_toBottomOf="@id/langSelector" />
+
+    <!-- ========== 主屏单语言显示区 ========== -->
+    <ScrollView
+        android:id="@+id/svMainDisplay"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="12dp"
+        android:fillViewport="true"
+        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        app:layout_constraintTop_toBottomOf="@id/langSelector">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvMainDisplayLang"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@color/lang_selected"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="印尼语"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvMainDisplayText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="等待翻译..."
+                android:textColor="@color/text_primary"
+                android:textSize="24sp"
+                android:lineSpacingExtra="8dp" />
+        </LinearLayout>
+    </ScrollView>
 
     <!-- ========== 底部操作区 ========== -->
     <LinearLayout

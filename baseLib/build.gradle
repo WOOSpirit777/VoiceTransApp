@@ -1,0 +1,99 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-parcelize'
+    id 'kotlin-kapt'
+}
+
+def config = rootProject.ext.lib
+def packageName = rootProject.ext.packageName
+
+android {
+    namespace packageName["baseLib"]
+    compileSdkVersion config.compileSdkVersion
+    defaultConfig {
+        minSdkVersion config.minSdkVersion
+        targetSdkVersion config.targetSdkVersion
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    buildFeatures {
+        dataBinding true
+        buildConfig true
+    }
+    namespace 'com.quniu.baselib'
+    /* repositories {
+         flatDir {
+             dir("libs")
+         }
+     }*/
+}
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar"])
+    //屏幕适配
+    api "com.github.JessYanCoding:AndroidAutoSize:v$autosizeVersion"
+
+    api "androidx.core:core-ktx:$ktCoreVersion"
+    api "androidx.appcompat:appcompat:$appcompatVersion"
+    api "com.google.android.material:material:$materialVersion"
+
+    //  网络请求
+    api "com.squareup.retrofit2:retrofit:$retrofitVersion"
+    api "com.squareup.retrofit2:converter-gson:$retrofitVersion"
+    api "com.squareup.okhttp3:logging-interceptor:$loggingVersion"
+    api "com.google.code.gson:gson:$gsonVersion"
+
+    //协程
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutinesVersion"
+
+    //lifecycle
+//    api "androidx.lifecycle:lifecycle-extensions:$lifecycleVersion"
+    api "androidx.lifecycle:lifecycle-runtime-ktx:$livedataVersion"
+    api "androidx.lifecycle:lifecycle-livedata-ktx:$livedataVersion"
+    api "androidx.lifecycle:lifecycle-viewmodel-ktx:$viewmodelVersion"
+
+    //EventBus
+    api "org.greenrobot:eventbus:$eventBusVersion"
+// Media3 (ExoPlayer)
+    api "androidx.media3:media3-exoplayer:1.3.1"
+    api "androidx.media3:media3-ui:1.3.1"
+    api "androidx.media3:media3-session:1.3.1"
+
+    
+    //日志
+    api 'com.github.pengwei1024:LogUtils:1.5.1'
+
+    // Glide
+    api "com.github.bumptech.glide:glide:4.16.0"
+    kapt "com.github.bumptech.glide:compiler:4.16.0"
+
+    // SmartRefreshLayout
+    api "io.github.scwang90:refresh-layout-kernel:2.1.0"
+    api "io.github.scwang90:refresh-header-classics:2.1.0"
+    api "io.github.scwang90:refresh-footer-classics:2.1.0"
+
+    // SpinKit
+    api "com.github.ybq:android-spinkit:1.4.0"
+// OkDownload 依赖
+    api 'com.liulishuo.okdownload:okdownload:1.0.7'
+
+    // MMKV
+    api "com.tencent:mmkv:$mmkvVersion"
+    
+}

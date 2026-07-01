@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/parentView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="30dp"
+    android:background="@drawable/bg_343441_c16"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/common_dialog_message_tv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="20dp"
+        android:layout_marginHorizontal="18dp"
+        android:gravity="center"
+        android:lineSpacingExtra="3dp"
+        android:paddingHorizontal="10dp"
+        android:textColor="#000000"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        tools:text="您的内存空间不足\n请删除不用的离线包" />
+
+
+    <TextView
+        android:id="@+id/common_dialog_left_title_tv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="14dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginRight="14dp"
+        android:layout_marginBottom="27dp"
+        android:gravity="center"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/ll_btn"
+        android:visibility="visible"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:layout_marginHorizontal="23dp"
+        android:layout_marginBottom="20dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/common_dialog_positive_tv"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/bg_btn_enable"
+            android:gravity="center"
+            android:singleLine="true"
+            android:layout_marginEnd="32dp"
+            android:fontFamily="sans-serif-medium"
+            android:text="@string/done"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+        <TextView
+            android:id="@+id/common_dialog_negative_tv"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+
+            android:layout_weight="1"
+            android:background="@drawable/bg_848499_c25"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/cancel"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#B3000000"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="注：确认解除后将在24小时后解除，等待期间可以取消解除关系"
+        android:textColor="#ff9e9e9e"
+        android:textSize="8sp"
+        android:gravity="center"
+        android:paddingBottom="15dp"
+        android:visibility="gone"
+        android:id="@+id/tv_bottom_hint"
+        />
+</LinearLayout>

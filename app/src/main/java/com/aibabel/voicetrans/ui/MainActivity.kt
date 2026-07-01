@@ -432,10 +432,10 @@ class MainActivity : AppCompatActivity() {
         if (result.isText) {
             if (currentMessage != null) {
                 if (result.isSource) {
-                    val existingSource = currentMessage!!.sourceText
+                    val existingSource = currentMessage!!.sourceText ?: ""
                     currentMessage!!.sourceText = existingSource + result.text
                 } else if (result.isTarget) {
-                    val existingTarget = currentMessage!!.targetText
+                    val existingTarget = currentMessage!!.targetText ?: ""
                     currentMessage!!.targetText = existingTarget + result.text
                     updateSecondScreen(
                         currentMessage!!.sourceText,

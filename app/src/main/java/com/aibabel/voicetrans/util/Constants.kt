@@ -1,10 +1,13 @@
 package com.aibabel.voicetrans.util
 
+import commonutil.ContentProviderUtil
+
 object Constants {
-    const val WS_URL_CN = "ws://192.168.1.226:18050/speech/mode/ws_s2s"
+//    const val WS_URL_CN = "ws://192.168.1.226:18050/speech/mode/ws_s2s"
+    const val WS_URL_CN = "wss://joner-trans.aibabel.cn/speech/mode/ws_s2s"
     const val WS_URL_COM = "wss://joner-trans.aibabel.com/speech/mode/ws"
     
-    const val WS_URL = WS_URL_CN
+     var WS_URL = if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM
 
     const val ACCESS_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODI0MzgxNDYsInN1YiI6Ikw2MDg3WUowMDAwMDAxNyJ9.XK0KfE3V9mDc1d8IVQ13DCFkTLjzOob9SGjJN1nXlk97JVRbdMFq2janlUt_5iT24raenigPWSw-dE6VwD_FaA"
 
@@ -35,7 +38,7 @@ object Constants {
     const val CLASS_TARGET = "target"
     const val CLASS_TTS = "tts"
 
-    const val TRANSLATE_FINISH_TIMEOUT_MS = 30000L
+    const val TRANSLATE_FINISH_TIMEOUT_MS = 40000L
 
     const val MODE_S2S = "s2s"
     const val MODE_S2T = "s2t"

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Terjemahan Suara</string>
+    <string name="btn_voice_hint">Tekan dan tahan tombol untuk merekam</string>
+    <string name="recording">Sedang merekam...</string>
+    <string name="connected">Terkoneksi</string>
+    <string name="disconnected">Tidak terkoneksi</string>
+    <string name="connecting">Menghubungkan...</string>
+    <string name="error">Terjadi kesalahan</string>
+    <string name="translate_timeout">Terjemahan timeout</string>
+    <string name="settings">Pengaturan</string>
+    <string name="back">Kembali</string>
+    <string name="audio_settings">Pengaturan Audio</string>
+    <string name="auto_play_tts_title">Mainkan audio terjemahan secara otomatis</string>
+    <string name="auto_play_tts_desc">Putar audio dari server setelah terjemahan selesai</string>
+    <string name="auto_play_enabled">Otomatis putar diaktifkan</string>
+    <string name="auto_play_disabled">Otomatis putar dinonaktifkan</string>
+    <string name="translation_result">Hasil Terjemahan</string>
+    <string name="waiting_for_translation">Menunggu terjemahan...</string>
+    <string name="secondary_screen_settings">Pengaturan Layar Sekunder</string>
+    <string name="secondary_screen_mode">Konten Tampilan</string>
+    <string name="secondary_screen_mode_indonesian">Tampilkan Bahasa Indonesia</string>
+    <string name="secondary_screen_mode_chinese">Tampilkan Bahasa Mandarin</string>
+    <string name="about_settings">Tentang</string>
+    <string name="check_update">Periksa Pembaruan</string>
+    <string name="current_version">Versi Saat Ini</string>
+    <string name="has_new_version">Ada versi baru</string>
+    <string name="update">Perbarui</string>
+    <string name="cancel">Batal</string>
+    <string name="downloading">Sedang mengunduh...</string>
+    <string name="download_complete">Unduhan selesai</string>
+    <string name="no_new_version">Sudah versi terbaru</string>
+    <string name="start_translation">Tekan tombol di bawah untuk memulai...</string>
+    <string name="start_speaking">Tekan tombol dan mulai berbicara</string>
+    <string name="recognizing">Sedang mengenali...</string>
+    <string name="clearing">Membersihkan...</string>
+    <string name="chinese">Mandarin</string>
+    <string name="indonesian">Indonesia</string>
+    <string name="clear">Hapus</string>
+    <string name="session_mode">Mode Sesi</string>
+    <string name="session_mode_s2s">Mode Komunikasi</string>
+    <string name="session_mode_s2t">Tafsir Simultan</string>
+    <string name="waiting_for_chinese">Menunggu konten Mandarin...</string>
+    <string name="waiting_for_indonesian">Menunggu konten Indonesia...</string>
+</resources>

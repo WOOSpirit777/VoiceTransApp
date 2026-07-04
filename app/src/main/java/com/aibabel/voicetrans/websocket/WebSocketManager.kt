@@ -6,7 +6,10 @@ import android.util.Log
 import com.aibabel.voicetrans.model.TranslationResult
 import com.aibabel.voicetrans.ui.MainActivity
 import com.aibabel.voicetrans.util.Constants
+import com.aibabel.voicetrans.util.Constants.WS_URL_CN
+import com.aibabel.voicetrans.util.Constants.WS_URL_COM
 import com.google.gson.Gson
+import commonutil.ContentProviderUtil
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -92,7 +95,7 @@ class WebSocketManager private constructor() {
         }
 
         isManualDisconnect = false
-        Log.i(TAG, "Connecting to: " + Constants.WS_URL)
+        Log.i(TAG, "Connecting to: " +if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM)
         Log.i(TAG, "langSource: $langSource, langTarget: $langTarget")
 
         val sessionId = UUID.randomUUID().toString()
@@ -100,7 +103,7 @@ class WebSocketManager private constructor() {
         Log.i(TAG, "SessionId: $sessionId")
 
         val request = Request.Builder()
-            .url(Constants.WS_URL)
+            .url(if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM)
             .addHeader("Authorization", Constants.ACCESS_TOKEN)
             .addHeader("langSource", langSource)
             .addHeader("langTarget", langTarget)

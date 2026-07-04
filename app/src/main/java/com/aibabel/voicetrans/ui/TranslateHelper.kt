@@ -19,6 +19,7 @@ import com.aibabel.voicetrans.data.TranslationSessionRepository
 import com.aibabel.voicetrans.model.ChatMessage
 import com.aibabel.voicetrans.model.TranslationResult
 import com.aibabel.voicetrans.util.Constants
+import com.aibabel.voicetrans.utils.LanguageUtils
 import com.aibabel.voicetrans.websocket.WebSocketManager
 import com.apkfuns.logutils.LogUtils
 import kotlinx.coroutines.CoroutineScope
@@ -137,7 +138,7 @@ class TranslateHelper(
         isRecording = true
         isProcessing.set(true)
 
-        tvRecordHint.text = "正在录音..."
+        tvRecordHint.text = getMainString(R.string.recording)
         onRecordingStateChange(false)
 
         // 使用WebSocket连接时创建的sessionId
@@ -187,7 +188,7 @@ class TranslateHelper(
         }
 
         handler.post {
-            tvRecordHint.text = "正在识别..."
+            tvRecordHint.text = getMainString(R.string.recognizing)
             onRecordingStateChange(true)
         }
 
@@ -198,11 +199,11 @@ class TranslateHelper(
         // 先初始化超时 Runnable，避免协程内使用时还未赋值导致 NPE
         translateFinishTimeoutRunnable = Runnable {
             Log.e(TAG, "Translate finish timeout after ${Constants.TRANSLATE_FINISH_TIMEOUT_MS}ms")
-            dismissLoadingDialog()
-            audioPlayerManager.stopStreamingPlayback()
-            isProcessing.set(false)
-            tvRecordHint.text = "翻译超时"
-            webSocketManager.sendClose()
+//            dismissLoadingDialog()
+//            audioPlayerManager.stopStreamingPlayback()
+//            isProcessing.set(false)
+//            tvRecordHint.text = getMainString(R.string.translate_timeout)
+//            webSocketManager.sendClose()
         }
 
         // 发送finish并启动播放
@@ -258,9 +259,9 @@ class TranslateHelper(
         val audioData = message.sourceAudioData
         if (audioData != null && audioData.isNotEmpty()) {
             audioPlayerManager.playPcm(audioData)
-            Toast.makeText(activity, "正在播放原文音频", Toast.LENGTH_SHORT).show()
+            Log.i(TAG, "Playing source audio, size=${audioData.size}")
         } else {
-            Toast.makeText(activity, "无原文音频数据", Toast.LENGTH_SHORT).show()
+            Log.w(TAG, "No source audio data")
         }
     }
 
@@ -268,13 +269,14 @@ class TranslateHelper(
         val audioData = message.ttsAudioData
         if (audioData != null && audioData.isNotEmpty()) {
             audioPlayerManager.playPcm(audioData)
-            Toast.makeText(activity, "正在播放翻译音频", Toast.LENGTH_SHORT).show()
+            Log.i(TAG, "Playing target audio, size=${audioData.size}")
         } else {
-            Toast.makeText(activity, "无翻译音频数据", Toast.LENGTH_SHORT).show()
+            Log.w(TAG, "No target audio data")
         }
     }
 
     fun playMainDisplayAudio() {
+        //点击主屏播放音频应该播放target 语种的音频
         val msg = currentMessage ?: return
         val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
         if (secondaryMode == SettingsActivity.MODE_CHINESE) {
@@ -286,7 +288,10 @@ class TranslateHelper(
 
     fun updateMainDisplayLanguage() {
         val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
-        tvMainDisplayLang.text = if (secondaryMode == SettingsActivity.MODE_CHINESE) "印尼语" else "中文"
+        val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+        val mainDisplayLang = if (mainShowChinese) "zh" else "id"
+        val labelResId = if (mainShowChinese) R.string.chinese else R.string.indonesian
+        tvMainDisplayLang.text = LanguageUtils.getStringByLang(activity, mainDisplayLang, labelResId)
     }
 
     fun release() {
@@ -303,7 +308,7 @@ class TranslateHelper(
         override fun onConnected() {
             handler.post {
                 onStatusUpdate("已连接", 0xFFE8F5E9.toInt(), 0xFF2E7D32.toInt())
-                Toast.makeText(activity, "连接成功", Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "WebSocket connected")
             }
         }
 
@@ -347,7 +352,7 @@ class TranslateHelper(
             handler.post {
                 dismissLoadingDialog()
                 onStatusUpdate("连接错误: $error", 0xFFFFEBEE.toInt(), 0xFFC62828.toInt())
-                Toast.makeText(activity, "连接错误: $error", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "WebSocket error: $error")
                 isRecording = false
                 isProcessing.set(false)
                 tvRecordHint.text = "连接失败，点击按钮重试"
@@ -359,7 +364,7 @@ class TranslateHelper(
         override fun onReconnected() {
             handler.post {
                 onStatusUpdate("已重连", 0xFFE8F5E9.toInt(), 0xFF2E7D32.toInt())
-                Toast.makeText(activity, "连接已恢复，继续发送数据", Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "WebSocket reconnected, resuming data send")
             }
             // 重连后恢复发送未发送的分段数据
             sendManager.onResumeAfterReconnect()
@@ -403,7 +408,7 @@ class TranslateHelper(
             }
             val msg = if (result.code != null) "错误(${result.code}): ${result.message}"
                       else "错误: ${result.message ?: "未知错误"}"
-            Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Translation error: $msg")
             isProcessing.set(false)
         }
     }
@@ -418,7 +423,7 @@ class TranslateHelper(
         }
 
         tvRecordHint.text = "翻译完成"
-        Toast.makeText(activity, "翻译完成", Toast.LENGTH_SHORT).show()
+        Log.i(TAG, "Translation finished")
 
         updateSecondScreen()
 
@@ -531,10 +536,10 @@ class TranslateHelper(
 
         override fun onRecordingError(error: String) {
             handler.post {
-                Toast.makeText(activity, "录音错误: $error", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Recording error: $error")
                 isRecording = false
                 isProcessing.set(false)
-                tvRecordHint.text = "点击按钮开始说话"
+                tvRecordHint.text = getMainString(R.string.start_speaking)
                 onRecordingStateChange(true)
             }
         }
@@ -550,6 +555,16 @@ class TranslateHelper(
     }
 
     // ==================== 工具方法 ====================
+
+    private fun getMainDisplayLang(): String {
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+        return if (mainShowChinese) "zh" else "id"
+    }
+
+    private fun getMainString(resId: Int): String {
+        return LanguageUtils.getStringByLang(activity, getMainDisplayLang(), resId)
+    }
 
     private fun updateLanguageInManager() {
         val targetLang = if (Constants.LANG_ZH == currentLang) Constants.LANG_ID else Constants.LANG_ZH
@@ -568,15 +583,17 @@ class TranslateHelper(
     private fun updateMainDisplay(sourceText: String?, targetText: String?, sourceLang: String?, targetLang: String?) {
         val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
         val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+        val mainDisplayLang = if (mainShowChinese) "zh" else "id"
+        val waitingResId = if (mainShowChinese) R.string.waiting_for_chinese else R.string.waiting_for_indonesian
 
         val textToShow = if (mainShowChinese) {
-            if (sourceLang == "zh") sourceText ?: "等待识别..."
-            else if (targetLang == "zh") targetText ?: "等待翻译..."
-            else "等待中文内容..."
+            if (sourceLang == "zh") sourceText ?: LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
+            else if (targetLang == "zh") targetText ?: LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
+            else LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
         } else {
-            if (sourceLang == "id") sourceText ?: "等待识别..."
-            else if (targetLang == "id") targetText ?: "等待翻译..."
-            else "等待印尼语内容..."
+            if (sourceLang == "id") sourceText ?: LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
+            else if (targetLang == "id") targetText ?: LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
+            else LanguageUtils.getStringByLang(activity, mainDisplayLang, waitingResId)
         }
 
         tvMainDisplayText.text = textToShow
@@ -584,13 +601,19 @@ class TranslateHelper(
     }
 
     fun clearDisplay() {
-        tvMainDisplayText.text = "等待翻译..."
-        secondaryDisplayManager.clearContent()
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+        val mainDisplayLang = if (mainShowChinese) "zh" else "id"
+        tvMainDisplayText.text = LanguageUtils.getStringByLang(activity, mainDisplayLang, R.string.start_translation)
+        secondaryDisplayManager.clearContent(secondaryMode)
         chatAdapter.clear()
     }
 
     private fun clearMainDisplay() {
-        tvMainDisplayText.text = "等待翻译..."
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        val mainShowChinese = secondaryMode == SettingsActivity.MODE_INDONESIAN
+        val mainDisplayLang = if (mainShowChinese) "zh" else "id"
+        tvMainDisplayText.text = LanguageUtils.getStringByLang(activity, mainDisplayLang, R.string.waiting_for_translation)
     }
 
     private fun saveTtsAudioToFile(audioData: ByteArray) {

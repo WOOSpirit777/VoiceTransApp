@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">中印尼语音翻译</string>
+    <string name="app_name">印尼语音翻译</string>
     <string name="btn_voice_hint">长按按钮开始录音</string>
     <string name="recording">正在录音...</string>
     <string name="connected">已连接</string>
     <string name="disconnected">未连接</string>
     <string name="connecting">连接中...</string>
     <string name="error">发生错误</string>
+    <string name="translate_timeout">翻译超时</string>
     <string name="settings">设置</string>
     <string name="back">返回</string>
     <string name="audio_settings">音频设置</string>
@@ -29,4 +30,16 @@
     <string name="downloading">正在下载...</string>
     <string name="download_complete">下载完成</string>
     <string name="no_new_version">已是最新版本</string>
+    <string name="start_translation">点击下方按钮开始翻译...</string>
+    <string name="start_speaking">点击按钮开始说话</string>
+    <string name="recognizing">正在识别...</string>
+    <string name="clearing">清空...</string>
+    <string name="chinese">中文</string>
+    <string name="indonesian">印尼</string>
+    <string name="clear">清空</string>
+    <string name="session_mode">会话模式</string>
+    <string name="session_mode_s2s">交流模式</string>
+    <string name="session_mode_s2t">同声传译</string>
+    <string name="waiting_for_chinese">等待中文内容...</string>
+    <string name="waiting_for_indonesian">等待印尼语内容...</string>
 </resources>

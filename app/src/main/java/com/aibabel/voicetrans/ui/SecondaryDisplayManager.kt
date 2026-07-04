@@ -20,6 +20,7 @@ class SecondaryDisplayManager(
     private var presentation: SecondaryPresentation? = null
     private var secondaryDisplay: Display? = null
     private var isDualScreen = false
+    private var currentMode = 0
 
     val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {
@@ -29,10 +30,10 @@ class SecondaryDisplayManager(
             if (display != null && display.isValid) {
                 val presentationDisplays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
                 if (presentationDisplays.isNotEmpty() && presentationDisplays[0].displayId == displayId) {
-                    secondaryDisplay = display
-                    isDualScreen = true
-                    showPresentation()
-                }
+                secondaryDisplay = display
+                isDualScreen = true
+                showPresentation(currentMode)
+            }
             }
         }
 
@@ -97,19 +98,24 @@ class SecondaryDisplayManager(
             secondaryDisplay!!.getMetrics(metrics)
             Log.e(TAG, "选中副屏: ${secondaryDisplay!!.name}, 分辨率: ${metrics.widthPixels}x${metrics.heightPixels}")
 
-            showPresentation()
+            showPresentation(currentMode)
         } else {
             Log.e(TAG, "未找到可用副屏 (Presentation 类)")
         }
     }
 
-    fun showPresentation() {
+    fun setMode(mode: Int) {
+        currentMode = mode
+    }
+
+    fun showPresentation(mode: Int = 0) {
         try {
             if (presentation == null && secondaryDisplay != null) {
                 presentation = SecondaryPresentation(activity, secondaryDisplay!!)
             }
             if (presentation != null && !presentation!!.isShowing) {
                 presentation!!.show()
+                presentation!!.clearContent(mode)
                 Log.e(TAG, "双屏模式已启用 - Presentation show() 成功")
             }
         } catch (e: Exception) {
@@ -130,10 +136,10 @@ class SecondaryDisplayManager(
         }
     }
 
-    fun clearContent() {
+    fun clearContent(mode: Int = 0) {
         if (isDualScreen && presentation != null) {
-            presentation!!.clearContent()
-            Log.e(TAG, "Clear second screen content")
+            presentation!!.clearContent(mode)
+            Log.e(TAG, "Clear second screen content, mode=$mode")
         }
     }
 

@@ -1,8 +1,8 @@
 package com.aibabel.voicetrans.ui
 
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
-import android.view.View
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.databinding.ActivitySettingsBinding
 import com.aibabel.voicetrans.util.Constants
@@ -65,6 +65,10 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
                 else -> MODE_INDONESIAN
             }
             prefs.edit().putInt(KEY_SECONDARY_SCREEN_MODE, mode).apply()
+            
+            val intent = Intent(ACTION_SECONDARY_MODE_CHANGED)
+            intent.putExtra(EXTRA_MODE, mode)
+            sendBroadcast(intent)
         }
 
         binding.rgSessionMode.setOnCheckedChangeListener { _, checkedId ->
@@ -98,5 +102,8 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
         const val KEY_SESSION_MODE = "session_mode"
         const val MODE_INDONESIAN = 0  // 显示印尼语
         const val MODE_CHINESE = 1      // 显示中文
+        
+        const val ACTION_SECONDARY_MODE_CHANGED = "com.aibabel.voicetrans.ACTION_SECONDARY_MODE_CHANGED"
+        const val EXTRA_MODE = "mode"
     }
 }

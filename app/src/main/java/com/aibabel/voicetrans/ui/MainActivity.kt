@@ -1,7 +1,10 @@
 package com.aibabel.voicetrans.ui
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -31,6 +34,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
     private lateinit var tvRecordHint: TextView
     private lateinit var btnChinese: Button
     private lateinit var btnIndonesian: Button
+    private lateinit var btnBack: ImageButton
     private lateinit var btnQrCode: ImageButton
     private lateinit var btnSettings: ImageButton
     private lateinit var btnClear: TextView
@@ -44,6 +48,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
 
     private lateinit var displayManager: SecondaryDisplayManager
     private lateinit var translateHelper: TranslateHelper
+    private lateinit var modeChangeReceiver: BroadcastReceiver
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -51,12 +56,15 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         super.onResume()
         translateHelper.updateMainDisplayLanguage()
         if (displayManager.isDualScreenAvailable()) {
-            displayManager.showPresentation()
+            val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+            displayManager.showPresentation(mode)
         }
+        registerReceiver(modeChangeReceiver, IntentFilter(SettingsActivity.ACTION_SECONDARY_MODE_CHANGED))
     }
 
     override fun onPause() {
         super.onPause()
+        unregisterReceiver(modeChangeReceiver)
 //        displayManager.dismissPresentation()
     }
 
@@ -73,6 +81,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         tvRecordHint = binding.tvRecordHint
         btnChinese = binding.btnChinese
         btnIndonesian = binding.btnIndonesian
+        btnBack = binding.btnBack
         btnQrCode = binding.btnQrCode
         btnSettings = binding.btnSettings
         btnClear = binding.btnClear
@@ -90,6 +99,8 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         displayManager = SecondaryDisplayManager(this, mainHandler)
         displayManager.turnOnSubScreen()
         displayManager.register()
+        val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        displayManager.setMode(mode)
 
         translateHelper = TranslateHelper(
             activity = this,
@@ -111,6 +122,18 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         translateHelper.init()
         translateHelper.updateMainDisplayLanguage()
 
+        modeChangeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == SettingsActivity.ACTION_SECONDARY_MODE_CHANGED) {
+                    val mode = intent.getIntExtra(SettingsActivity.EXTRA_MODE, SettingsActivity.MODE_INDONESIAN)
+                    displayManager.setMode(mode)
+                    displayManager.showPresentation(mode)
+                    translateHelper.updateMainDisplayLanguage()
+                    translateHelper.clearDisplay()
+                }
+            }
+        }
+
         mainHandler.postDelayed({ displayManager.detectAndInit() }, 500)
     }
 
@@ -119,6 +142,10 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
     }
 
     override fun initListener() {
+        btnBack.setOnClickListener {
+            finish()
+        }
+
         btnChinese.setOnClickListener {
             if (!translateHelper.isRecording()) {
                 translateHelper.setCurrentLang(Constants.LANG_ZH)
@@ -146,7 +173,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         }
 
         tvMainDisplayText.setOnClickListener {
-            translateHelper.playMainDisplayAudio()
+//            translateHelper.playMainDisplayAudio()
         }
 
         audioButtonView.setCallback(object : AudioButtonView.AudioButtonCallback {

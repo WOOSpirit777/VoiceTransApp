@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.aibabel.voicetrans.R
+import com.aibabel.voicetrans.utils.LanguageUtils
 
 class SecondaryPresentation(outerContext: Context, display: Display) : Presentation(outerContext, display) {
 
@@ -48,22 +49,22 @@ class SecondaryPresentation(outerContext: Context, display: Display) : Presentat
             return
         }
 
-        val langLabel = getLangLabel(sourceLang) + " → " + getLangLabel(targetLang)
+        val displayLang = if (mode == 1) "zh" else "id"
+        val langLabel = getLangLabel(sourceLang, displayLang) + " → " + getLangLabel(targetLang, displayLang)
         tvLangLabel!!.text = langLabel
 
         // 根据mode和语言标识决定显示哪个语言的文本
         // mode=0: 显示印尼语
         // mode=1: 显示中文
+        val waitingResId = if (mode == 1) R.string.waiting_for_chinese else R.string.waiting_for_indonesian
         val textToShow = if (mode == 1) {
-            // 显示中文：如果sourceLang是中文就显示sourceText，否则显示targetText（如果targetLang是中文）
-            if (sourceLang == "zh") sourceText ?: "等待识别..."
-            else if (targetLang == "zh") targetText ?: "等待翻译..."
-            else "等待中文内容..."
+            if (sourceLang == "zh") sourceText ?: LanguageUtils.getStringByLang(context, displayLang, waitingResId)
+            else if (targetLang == "zh") targetText ?: LanguageUtils.getStringByLang(context, displayLang, waitingResId)
+            else LanguageUtils.getStringByLang(context, displayLang, waitingResId)
         } else {
-            // 显示印尼语：如果sourceLang是印尼语就显示sourceText，否则显示targetText（如果targetLang是印尼语）
-            if (sourceLang == "id") sourceText ?: "等待识别..."
-            else if (targetLang == "id") targetText ?: "等待翻译..."
-            else "等待印尼语内容..."
+            if (sourceLang == "id") sourceText ?: LanguageUtils.getStringByLang(context, displayLang, waitingResId)
+            else if (targetLang == "id") targetText ?: LanguageUtils.getStringByLang(context, displayLang, waitingResId)
+            else LanguageUtils.getStringByLang(context, displayLang, waitingResId)
         }
 
         contentTextView!!.text = textToShow
@@ -73,20 +74,21 @@ class SecondaryPresentation(outerContext: Context, display: Display) : Presentat
         }
     }
 
-    fun clearContent() {
-        contentTextView?.text = "等待翻译..."
-        tvLangLabel?.text = "翻译结果"
+    fun clearContent(mode: Int = 0) {
+        val displayLang = if (mode == 1) "zh" else "id"
+        contentTextView?.text = LanguageUtils.getStringByLang(context, displayLang, R.string.waiting_for_translation)
+        tvLangLabel?.text = LanguageUtils.getStringByLang(context, displayLang, R.string.translation_result)
     }
 
     fun getContentScrollView(): ScrollView? = contentScrollView
 
     fun getContentTextView(): TextView? = contentTextView
 
-    private fun getLangLabel(lang: String?): String {
+    private fun getLangLabel(lang: String?, displayLang: String): String {
         return when (lang) {
-            "zh" -> "中文"
-            "en" -> "英文"
-            "id" -> "印尼文"
+            "zh" -> if (displayLang == "zh") "中文" else "Mandarin"
+            "en" -> if (displayLang == "zh") "英文" else "English"
+            "id" -> if (displayLang == "zh") "印尼文" else "Indonesia"
             else -> lang ?: ""
         }
     }

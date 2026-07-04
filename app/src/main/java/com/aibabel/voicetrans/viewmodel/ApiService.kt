@@ -1,5 +1,6 @@
 package com.aibabel.voicetrans.viewmodel
 
+import com.aibabel.voicetrans.model.BroadcastUrlResponse
 import netlib.NetConst
 import netlib.data.TokenData
 import netlib.data.VersionData
@@ -33,6 +34,9 @@ interface ApiService {
     suspend fun checkVersion(
         @Body body: RequestBody
     ): BaseResult<VersionData>
+
+    @POST(NetConst.API_TAG_SPEECH + "/mode/broadcast_url")
+    suspend fun getBroadcastUrl(@Body body: RequestBody): BroadcastUrlResponse
 
 
 }

@@ -35,7 +35,7 @@ object NetClient {
             logDir.mkdirs()
         }
         val loggingInterceptor = HttpLoggingInterceptor()
-        loggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        loggingInterceptor.level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
         val headerInterceptor = Interceptor { chain ->
             val build = chain.request().newBuilder()
                 .addHeader("Authorization","${NetConst.TOKEN_TYPE} ${NetConst.TOKEN}")

@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.aibabel.voicetrans.model.TranslationResult
+import com.aibabel.voicetrans.ui.MainActivity
 import com.aibabel.voicetrans.util.Constants
 import com.google.gson.Gson
 import okhttp3.OkHttpClient
@@ -25,6 +26,7 @@ class WebSocketManager private constructor() {
         fun onResult(result: TranslationResult)
         fun onBinaryData(data: ByteArray)
         fun onError(error: String)
+        fun onReconnected() {}
     }
 
     private var webSocket: WebSocket? = null
@@ -32,13 +34,16 @@ class WebSocketManager private constructor() {
     private var gson: Gson
     private var langSource: String = Constants.LANG_ZH
     private var langTarget: String = Constants.LANG_ID
+    private var mode: String = Constants.MODE_S2S
     @Volatile
     private var isConnected = false
     private var isManualDisconnect = false
+    private var hasConnectedBefore = false
     private var reconnectAttempts = 0
     private var reconnectRunnable: Runnable? = null
     private var callback: WebSocketCallback? = null
     private var mainHandler: Handler
+    private var currentSessionId: String = ""
 
     init {
         gson = Gson()
@@ -67,11 +72,17 @@ class WebSocketManager private constructor() {
         langTarget = targetLang
     }
 
+    fun setMode(newMode: String) {
+        mode = newMode
+    }
+
     fun getLangSource(): String = langSource
 
     fun getLangTarget(): String = langTarget
 
     fun isConnected(): Boolean = isConnected
+
+    fun getSessionId(): String = currentSessionId
 
     fun connect() {
         Log.i(TAG, ">>> WebSocket connect() called")
@@ -85,6 +96,7 @@ class WebSocketManager private constructor() {
         Log.i(TAG, "langSource: $langSource, langTarget: $langTarget")
 
         val sessionId = UUID.randomUUID().toString()
+        this.currentSessionId = sessionId
         Log.i(TAG, "SessionId: $sessionId")
 
         val request = Request.Builder()
@@ -93,6 +105,7 @@ class WebSocketManager private constructor() {
             .addHeader("langSource", langSource)
             .addHeader("langTarget", langTarget)
             .addHeader("sessionId", sessionId)
+            .addHeader("mode", mode)
             .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -101,9 +114,15 @@ class WebSocketManager private constructor() {
                 Log.e(TAG, "Response code: " + response.code)
                 isConnected = true
                 reconnectAttempts = 0
-
+//                sendConnect()
                 mainHandler.post {
-                    callback?.onConnected()
+                    if (hasConnectedBefore) {
+                        Log.e(TAG, "WebSocket reconnected, notifying callback")
+                        callback?.onReconnected()
+                    } else {
+                        hasConnectedBefore = true
+                        callback?.onConnected()
+                    }
                 }
             }
 
@@ -123,9 +142,10 @@ class WebSocketManager private constructor() {
                 }
                 Log.i(TAG, "Binary data (first $printLen bytes): ${hexBuilder.toString()}")
 
-                mainHandler.post {
-                    callback?.onBinaryData(data)
-                }
+                // 直接在OkHttp回调线程处理，避免大量二进制数据通过mainHandler.post
+                // 阻塞主线程消息队列，导致文本消息（如"translate finish"）延迟处理
+                // onBinaryData中的操作（ttsAudioBuffer同步写、feedAudioData入队、scope.launch存库）均为线程安全
+                callback?.onBinaryData(data)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -144,6 +164,7 @@ class WebSocketManager private constructor() {
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure: " + t.message)
+                Log.e(TAG, "WebSocket failure cause: " + t.cause?.message)
                 Log.e(TAG, "Failure type: " + t.javaClass.simpleName)
 
                 if (response != null) {
@@ -157,12 +178,15 @@ class WebSocketManager private constructor() {
 
                 isConnected = false
                 reconnectAttempts++
-                if (reconnectAttempts <= 3) {
+               /* if (reconnectAttempts <= 3) {
                     reconnect()
                 } else {
                     mainHandler.post {
                         callback?.onError(t.message ?: "Unknown error")
                     }
+                }*/
+                mainHandler.post {
+                    callback?.onError(t.message ?: "Unknown error")
                 }
             }
         })
@@ -185,23 +209,28 @@ class WebSocketManager private constructor() {
         }
     }
 
-    fun sendAudioData(data: ByteArray) {
+    fun sendAudioData(data: ByteArray): Boolean {
         if (webSocket == null) {
             Log.e(TAG, "WebSocket is null, cannot send audio")
-            return
+            return false
         }
         if (!isConnected) {
             Log.e(TAG, "WebSocket not connected (isConnected=false), cannot send audio. Queue size=" + (webSocket!!.queueSize()))
-            return
+            return false
         }
-
-        Log.i(TAG, ">>> Sending audio data: " + data.size + " bytes")
+        val hexBuilder = StringBuilder()
+        val printLen = minOf(data.size, 64)
+        for (i in 0 until printLen) {
+            hexBuilder.append(String.format("%02X ", data[i]))
+        }
+        Log.i(TAG2, ">>> Sending audio data: (first $printLen bytes): ${hexBuilder.toString()}")
         val sent = webSocket!!.send(ByteString.of(*data))
         if (sent) {
-            Log.i(TAG, "Audio data sent successfully, queue size=" + webSocket!!.queueSize())
+            Log.i(TAG2, "Audio data sent successfully, size=${data.size}, queue size=" + webSocket!!.queueSize())
         } else {
-            Log.e(TAG, "Failed to send audio data, queue size=" + webSocket!!.queueSize())
+            Log.e(TAG2, "Failed to send audio data, queue size=" + webSocket!!.queueSize())
         }
+        return sent
     }
 
     fun sendCommand(command: String) {
@@ -227,8 +256,13 @@ class WebSocketManager private constructor() {
         sendCommand(Constants.CMD_FINISH)
     }
 
+    fun sendConnect() {
+        sendCommand(Constants.CMD_CONNECT)
+    }
+
     fun sendClose() {
         sendCommand(Constants.CMD_CLOSE)
+        disconnect()
     }
 
     fun disconnect() {
@@ -239,17 +273,37 @@ class WebSocketManager private constructor() {
         }
         webSocket?.let {
             isConnected = false
-            it.close(1000, "User disconnect")
+            it.cancel()
         }
+        hasConnectedBefore = false
     }
 
     fun reconnect() {
-        disconnect()
-        mainHandler.postDelayed({ connect() }, 500)
+        isManualDisconnect = false
+        reconnectRunnable?.let {
+            mainHandler.removeCallbacks(it)
+            reconnectRunnable = null
+        }
+        webSocket?.let {
+            isConnected = false
+            it.close(1000, "Reconnect")
+        }
+        mainHandler.postDelayed({ connect() }, getReconnectDelay())
+    }
+
+    private fun getReconnectDelay(): Long {
+        val delay = when (reconnectAttempts) {
+            1 -> 1000L
+            2 -> 2000L
+            3 -> 4000L
+            else -> 8000L
+        }
+        return delay
     }
 
     companion object {
         private const val TAG = "WebSocketManager"
+        private const val TAG2 = "SendAudios"
         private const val MAX_RECONNECT_ATTEMPTS = 5
         private var instance: WebSocketManager? = null
 

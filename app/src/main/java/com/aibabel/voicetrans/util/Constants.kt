@@ -19,6 +19,7 @@ object Constants {
 
     const val CMD_FINISH = "finish"
     const val CMD_CLOSE = "close"
+    const val CMD_CONNECT = "connect"
 
     const val RESP_PROCESSING_COMPLETED = "Processing completed and result sent"
     const val RESP_CONNECTION_CLOSING = "Connection closing"
@@ -35,4 +36,7 @@ object Constants {
     const val CLASS_TTS = "tts"
 
     const val TRANSLATE_FINISH_TIMEOUT_MS = 30000L
+
+    const val MODE_S2S = "s2s"
+    const val MODE_S2T = "s2t"
 }

@@ -33,6 +33,16 @@
             android:textStyle="bold" />
 
         <ImageButton
+            android:id="@+id/btnQrCode"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="扫码同步"
+            android:src="@android:drawable/ic_menu_gallery"
+            app:tint="@color/text_secondary" />
+
+        <ImageButton
             android:id="@+id/btnSettings"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -56,54 +66,48 @@
         android:textSize="11sp"
         app:layout_constraintTop_toBottomOf="@id/titleBar" />
 
-    <!-- ========== 语言选择区 ========== -->
-    <LinearLayout
-        android:id="@+id/langSelector"
-        android:layout_width="match_parent"
+    <!-- ========== 清空按钮 ========== -->
+    <TextView
+        android:id="@+id/tvMainDisplayLang"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="12dp"
-        android:gravity="center"
-        android:orientation="horizontal"
-        app:layout_constraintTop_toBottomOf="@id/tvStatus">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnChinese"
-            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-            android:layout_width="0dp"
-            android:layout_height="42dp"
-            android:layout_marginEnd="4dp"
-            android:layout_weight="1"
-            android:backgroundTint="@color/lang_selected"
-            android:text="中文"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            app:cornerRadius="21dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnIndonesian"
-            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-            android:layout_width="0dp"
-            android:layout_height="42dp"
-            android:layout_marginStart="4dp"
-            android:layout_weight="1"
-            android:backgroundTint="@color/lang_default"
-            android:text="印尼语"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            app:cornerRadius="21dp" />
-    </LinearLayout>
+        android:background="@color/lang_selected"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="4dp"
+        android:text="印尼语"
+        app:layout_constraintTop_toBottomOf="@id/tvStatus"
+        app:layout_constraintStart_toStartOf="parent"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/btnClear"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="清空"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="4dp"
+        android:textSize="12sp"
+        android:textColor="@color/text_secondary"
+        android:background="@color/lang_selected"
+        app:layout_constraintTop_toBottomOf="@id/tvStatus"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp" />
 
     <!-- ========== 对话列表（保留，默认隐藏） ========== -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvChat"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="48dp"
         android:clipToPadding="false"
         android:padding="16dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/bottomContainer"
-        app:layout_constraintTop_toBottomOf="@id/langSelector" />
+        app:layout_constraintTop_toBottomOf="@id/tvStatus" />
 
     <!-- ========== 主屏单语言显示区 ========== -->
     <ScrollView
@@ -111,34 +115,24 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="48dp"
         android:fillViewport="true"
         app:layout_constraintBottom_toTopOf="@id/bottomContainer"
-        app:layout_constraintTop_toBottomOf="@id/langSelector">
+        app:layout_constraintTop_toBottomOf="@id/tvStatus">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/tvMainDisplayLang"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@color/lang_selected"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="4dp"
-                android:text="印尼语"
-                android:textColor="@color/text_primary"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+
 
             <TextView
                 android:id="@+id/tvMainDisplayText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="等待翻译..."
+                android:text="点击下方按钮开始翻译..."
                 android:textColor="@color/text_primary"
                 android:textSize="24sp"
                 android:lineSpacingExtra="8dp" />
@@ -151,26 +145,54 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/bg_bottom_bar"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp"
         app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnChinese"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:backgroundTint="@color/lang_selected"
+            android:text="中文"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            app:cornerRadius="21dp" />
 
         <com.aibabel.voicetrans.ui.AudioButtonView
             android:id="@+id/audioButtonView"
             android:layout_width="160dp"
             android:layout_height="160dp"
+            android:layout_marginHorizontal="16dp"
             android:layout_gravity="center" />
 
-        <TextView
-            android:id="@+id/tvRecordHint"
-            android:layout_width="wrap_content"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnIndonesian"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="点击按钮开始说话"
-            android:textColor="@color/text_hint"
-            android:textSize="13sp" />
+            android:layout_weight="1"
+            android:backgroundTint="@color/lang_default"
+            android:text="印尼"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            app:cornerRadius="21dp" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvRecordHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="点击按钮开始说话"
+        android:textColor="@color/text_hint"
+        android:textSize="13sp"
+        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

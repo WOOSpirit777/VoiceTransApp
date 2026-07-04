@@ -26,6 +26,9 @@ class AudioPlayerManager private constructor() {
     private var audioTrack: AudioTrack? = null
     @Volatile
     private var isPlaying = false
+    @Volatile
+    private var isStreaming = false
+    private val audioBuffer = java.util.concurrent.LinkedBlockingQueue<ByteArray>()
     private var executor: ExecutorService
     private var mainHandler: Handler
     private var callback: AudioPlayerCallback? = null
@@ -40,6 +43,8 @@ class AudioPlayerManager private constructor() {
     }
 
     fun isPlaying(): Boolean = isPlaying
+
+    fun isStreaming(): Boolean = isStreaming
 
     fun playPcm(pcmData: ByteArray) {
         if (isPlaying) {
@@ -101,6 +106,101 @@ class AudioPlayerManager private constructor() {
                 }
             }
         }
+    }
+
+    fun startStreamingPlayback() {
+        if (isPlaying) {
+            stop()
+        }
+
+        audioBuffer.clear()
+        isStreaming = true
+        isPlaying = true
+
+        executor.execute {
+            try {
+                val bufferSize = AudioTrack.getMinBufferSize(
+                    Constants.SAMPLE_RATE,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(Constants.SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(bufferSize * 4)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+
+                audioTrack = track
+                track.play()
+
+                mainHandler.post {
+                    callback?.onPlaybackStart()
+                }
+
+                val tmpBuffer = ByteArray(bufferSize)
+                var tmpOffset = 0
+
+                while (isPlaying && (isStreaming || audioBuffer.isNotEmpty())) {
+                    val chunk = audioBuffer.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    if (chunk != null) {
+                        var chunkOffset = 0
+                        while (chunkOffset < chunk.size) {
+                            val copyLen = minOf(bufferSize - tmpOffset, chunk.size - chunkOffset)
+                            System.arraycopy(chunk, chunkOffset, tmpBuffer, tmpOffset, copyLen)
+                            tmpOffset += copyLen
+                            chunkOffset += copyLen
+
+                            if (tmpOffset >= bufferSize) {
+                                track.write(tmpBuffer, 0, bufferSize)
+                                tmpOffset = 0
+                            }
+                        }
+                    }
+                }
+
+                if (tmpOffset > 0) {
+                    track.write(tmpBuffer, 0, tmpOffset)
+                }
+
+                Thread.sleep(200)
+
+                mainHandler.post {
+                    isPlaying = false
+                    isStreaming = false
+                    callback?.onPlaybackComplete()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Stream play error: " + e.message)
+                mainHandler.post {
+                    isPlaying = false
+                    isStreaming = false
+                    callback?.onPlaybackError(e.message ?: "Unknown error")
+                }
+            }
+        }
+    }
+
+    fun feedAudioData(data: ByteArray) {
+        if (isStreaming) {
+            audioBuffer.offer(data)
+        }
+    }
+
+    fun stopStreamingPlayback() {
+        isStreaming = false
     }
 
     fun playFromUrl(url: String) {

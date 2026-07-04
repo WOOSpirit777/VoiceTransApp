@@ -37,3 +37,4 @@ outputs/
 # OS files
 .DS_Store
 Thumbs.db
+/app/release/output-metadata.json

@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.View
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.databinding.ActivitySettingsBinding
+import com.aibabel.voicetrans.util.Constants
 import com.aibabel.voicetrans.viewmodel.SettingsViewModel
 import com.quniu.baselib.activity.BaseVBActivityOpt
 import com.quniu.baselib.util.ToastUtil
@@ -29,6 +30,12 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
         when (mode) {
             MODE_CHINESE -> binding.rbChinese.isChecked = true
             else -> binding.rbIndonesian.isChecked = true
+        }
+
+        val sessionMode = prefs.getString(KEY_SESSION_MODE, Constants.MODE_S2S)
+        when (sessionMode) {
+            Constants.MODE_S2T -> binding.rbS2t.isChecked = true
+            else -> binding.rbS2s.isChecked = true
         }
 
         binding.tvVersionName.text = "当前版本 ${packageManager.getPackageInfo(packageName, 0).versionName}"
@@ -60,6 +67,15 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
             prefs.edit().putInt(KEY_SECONDARY_SCREEN_MODE, mode).apply()
         }
 
+        binding.rgSessionMode.setOnCheckedChangeListener { _, checkedId ->
+            val sessionMode = when (checkedId) {
+                R.id.rbS2t -> Constants.MODE_S2T
+                else -> Constants.MODE_S2S
+            }
+            prefs.edit().putString(KEY_SESSION_MODE, sessionMode).apply()
+            ToastUtil.showShort(if (sessionMode == Constants.MODE_S2T) "已切换到同声传译" else "已切换到交流模式")
+        }
+
         binding.layoutCheckUpdate.setOnClickListener {
             viewModel.checkUpdate()
         }
@@ -79,6 +95,7 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
         const val PREFS_NAME = "VoiceTransSettings"
         const val KEY_AUTO_PLAY = "auto_play_tts"
         const val KEY_SECONDARY_SCREEN_MODE = "secondary_screen_mode"
+        const val KEY_SESSION_MODE = "session_mode"
         const val MODE_INDONESIAN = 0  // 显示印尼语
         const val MODE_CHINESE = 1      // 显示中文
     }

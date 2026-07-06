@@ -88,18 +88,25 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         displayManager.release()
         translateHelper.release()
     }
+    // 物理按键操作：记录当前按下的物理按键对应按钮，防止重复触发
     private var physicalKeyPressedButton: Button? = null
+    // 录音冷却标记：录音结束后1秒内禁止开启新录音，防止自动结束后误触
+    private var isRecordingCoolDown = false
 
+    // 物理按键按下 → 开始录音（push-to-talk 模式）
+    // keyCode 134 = 屏幕左侧按钮 → 主屏语言
+    // keyCode 135 = 屏幕右侧按钮 → 副屏语言
+    // keyCode 136 = 返回键 → 退出应用
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             134 -> {
-                if (!translateHelper.isRecording() && physicalKeyPressedButton == null) {
+                if (!translateHelper.isRecording() && physicalKeyPressedButton == null && !isRecordingCoolDown) {
                     startRecordingByPhysicalKey(btnMainScreen)
                 }
                 true
             }
             135 -> {
-                if (!translateHelper.isRecording() && physicalKeyPressedButton == null) {
+                if (!translateHelper.isRecording() && physicalKeyPressedButton == null && !isRecordingCoolDown) {
                     startRecordingByPhysicalKey(btnSecondaryScreen)
                 }
                 true
@@ -112,6 +119,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         }
     }
 
+    // 物理按键松开 → 停止录音
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             134, 135 -> {
@@ -122,6 +130,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         }
     }
 
+    // 物理按键按下时启动录音并播放按压动画
     private fun startRecordingByPhysicalKey(button: Button) {
         val lang = if (button.id == R.id.btnMainScreen) getMainScreenLang() else getSecondaryScreenLang()
         translateHelper.startRecordingWithLang(lang)
@@ -129,12 +138,18 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         physicalKeyPressedButton = button
     }
 
+    // 物理按键松开时停止录音并恢复动画
     private fun stopRecordingByPhysicalKey() {
         physicalKeyPressedButton?.let {
             translateHelper.stopRecording()
             animateButtonRelease(it)
         }
         physicalKeyPressedButton = null
+        // 设置1秒冷却期：录音结束后1秒内禁止开启新录音，防止自动结束后误触
+        isRecordingCoolDown = true
+        Handler(Looper.getMainLooper()).postDelayed({
+            isRecordingCoolDown = false
+        }, 1000)
     }
     override fun initView() {
         prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)

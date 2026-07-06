@@ -17,6 +17,17 @@ import java.util.Arrays
 import java.util.Date
 import java.util.Locale
 
+/**
+ * 录音管理器（单例）
+ *
+ * 功能：
+ * 1. 使用 AudioRecord 采集 PCM 音频（16kHz / 16bit / 单声道）
+ * 2. 分段回调录音数据（3200 字节 / 200ms）
+ * 3. 实时保存 PCM 文件到 /storage/emulated/0/Music/
+ * 4. 60 秒自动停止
+ *
+ * 文件名格式：VoiceTrans_{lang}_{yyyyMMdd_HHmmss}.pcm
+ */
 class AudioRecorderManager private constructor() {
 
     interface AudioRecordCallback {

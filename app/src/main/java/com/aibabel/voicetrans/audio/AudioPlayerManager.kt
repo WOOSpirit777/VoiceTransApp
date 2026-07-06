@@ -15,6 +15,19 @@ import java.net.URL
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/**
+ * 音频播放器管理器（单例）
+ *
+ * 功能：
+ * 1. 完整 PCM 播放（playPcm）
+ * 2. 流式 PCM 播放（startStreamingPlayback + feedAudioData）
+ *    - 使用 LinkedBlockingQueue 作为音频缓冲区
+ *    - 单线程消费队列数据写入 AudioTrack
+ *    - 支持边收边播，用于 TTS 实时播放
+ * 3. URL 音频播放（playFromUrl），支持 WAV 和 PCM 格式
+ *
+ * 音频格式：16kHz / 16bit / 单声道 / 语音内容类型
+ */
 class AudioPlayerManager private constructor() {
 
     interface AudioPlayerCallback {

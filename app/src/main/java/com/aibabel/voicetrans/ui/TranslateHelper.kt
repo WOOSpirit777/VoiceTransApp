@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.RelativeLayout
@@ -72,6 +73,8 @@ class TranslateHelper(
     private var translateFinishTimeoutRunnable: Runnable? = null
     private var recordTimeoutRunnable: Runnable? = null
     private var scrollRunnable: Runnable? = null
+    private var msgIdRetryCount = 0
+    private var msgIdRetryRunnable: Runnable? = null
 
     // 录音分段发送相关
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -188,6 +191,16 @@ class TranslateHelper(
 
     }
 
+    /**
+     * 停止录音并请求翻译完成
+     *
+     * 流程：
+     * 1. 停止录音
+     * 2. 显示 Loading 弹窗
+     * 3. 发送 finish 命令
+     * 4. 启动 5 秒超时计时（超时后发送 msg_id 重试）
+     * 5. 启动 TTS 流式播放（缓存录音过程中已收到的音频）
+     */
     fun stopRecording() {
         if (!isRecording) return
 
@@ -210,12 +223,9 @@ class TranslateHelper(
 
         // 先初始化超时 Runnable，避免协程内使用时还未赋值导致 NPE
         translateFinishTimeoutRunnable = Runnable {
-            Log.e(TAG, "Translate finish timeout after ${Constants.TRANSLATE_FINISH_TIMEOUT_MS}ms")
-            dismissLoadingDialog()
-            audioPlayerManager.stopStreamingPlayback()
-            isProcessing.set(false)
-            tvRecordHint.text = getMainString(R.string.translate_timeout)
-            webSocketManager.sendClose()
+            Log.e(TAG, "[TranslateFinishTimeout] 5秒超时，发送最后一条消息的 msg_id")
+            msgIdRetryCount = 0
+            sendLastMsgIdAndRetry()
         }
 
         // 发送finish并启动播放
@@ -262,7 +272,7 @@ class TranslateHelper(
                 }
             }
             //结束录制设置翻译超时计时
-//            handler.postDelayed(translateFinishTimeoutRunnable!!, Constants.TRANSLATE_FINISH_TIMEOUT_MS)
+            handler.postDelayed(translateFinishTimeoutRunnable!!, Constants.TRANSLATE_FINISH_TIMEOUT_MS)
         }
 
     }
@@ -366,6 +376,7 @@ class TranslateHelper(
                 recordingContainer.visibility = View.GONE
                 onStatusUpdate("连接错误: $error", 0xFFFFEBEE.toInt(), 0xFFC62828.toInt())
                 Log.e(TAG, "WebSocket error: $error")
+                Toast.makeText(activity, "连接异常: $error", Toast.LENGTH_SHORT).show()
                 isRecording = false
                 isProcessing.set(false)
                 tvRecordHint.text = "连接失败，点击按钮重试"
@@ -429,14 +440,20 @@ class TranslateHelper(
     private fun handleTranslateFinish() {
         Log.e(TAG, "Translate finish received")
 
+        // 取消所有超时和重试定时器
         dismissLoadingDialog()
         translateFinishTimeoutRunnable?.let {
             handler.removeCallbacks(it)
             translateFinishTimeoutRunnable = null
         }
+        msgIdRetryRunnable?.let {
+            handler.removeCallbacks(it)
+            msgIdRetryRunnable = null
+        }
+        msgIdRetryCount = 0
 
         tvRecordHint.text = "翻译完成"
-        Log.i(TAG, "Translation finished")
+        Log.i(TAG, "[TranslateFinish] 收到服务端 finish，正常结束对话")
 
         updateSecondScreen()
 
@@ -470,6 +487,84 @@ class TranslateHelper(
         }
     }
 
+    /**
+     * 发送最后一条消息的 msg_id 请求续传
+     *
+     * 触发条件：发送 finish 后 5 秒未收到服务端 finish 响应
+     * 重试次数：最多 2 次
+     * 每次间隔：3 秒
+     * 2 次后仍未收到 → 手动结束对话
+     */
+    private fun sendLastMsgIdAndRetry() {
+        val lastMsgId = webSocketManager.getLastMsgId()
+        if (lastMsgId.isEmpty()) {
+            Log.e(TAG, "[MsgIdRetry] 没有收到任何消息，跳过重试")
+            finishTranslationManually()
+            return
+        }
+
+        msgIdRetryCount++
+        Log.e(TAG, "[MsgIdRetry] 第 $msgIdRetryCount 次重试，发送 msg_id: $lastMsgId")
+        webSocketManager.sendCommand("{\"msg_id\":\"$lastMsgId\"}")
+
+        msgIdRetryRunnable = Runnable {
+            if (msgIdRetryCount >= 2) {
+                Log.e(TAG, "[MsgIdRetry] 已重试 2 次，仍然未收到 finish，手动结束对话")
+                finishTranslationManually()
+            } else {
+                sendLastMsgIdAndRetry()
+            }
+        }
+        handler.postDelayed(msgIdRetryRunnable!!, 3000)
+    }
+
+    /**
+     * 手动结束翻译对话（未收到服务端 finish 时的兜底逻辑）
+     *
+     * 执行与 handleTranslateFinish 相同的收尾操作：
+     * - 关闭 Loading
+     * - 隐藏录音遮罩
+     * - 保存 TTS 音频到文件
+     * - 停止流式播放
+     * - 清理数据库
+     * - 关闭 WebSocket
+     * - 重置状态
+     */
+    private fun finishTranslationManually() {
+        Log.e(TAG, "[ManualFinish] 手动处理 translate finish 逻辑（未收到服务端 finish）")
+
+        dismissLoadingDialog()
+        recordingContainer.visibility = View.GONE
+
+        updateSecondScreen()
+
+        synchronized(ttsAudioBuffer) {
+            val audioData = ttsAudioBuffer.toByteArray()
+            if (audioData.isNotEmpty()) {
+                currentMessage?.let {
+                    it.ttsAudioData = audioData
+                    chatAdapter.updateLastMessage(it)
+                }
+                saveTtsAudioToFile(audioData)
+                audioPlayerManager.stopStreamingPlayback()
+                Log.e(TAG, "[ManualFinish] Stop streaming playback, total audio: ${audioData.size} bytes")
+            }
+        }
+
+        val sessionId = currentSessionId
+        scope.launch {
+            sendManager.cleanupSession(sessionId)
+        }
+
+        Handler(Looper.getMainLooper()).post {
+            webSocketManager.sendClose()
+            isProcessing.set(false)
+            currentMessage = null
+            audioButtonView.setRecordingState(false)
+            tvRecordHint.text = "点击按钮开始说话"
+        }
+    }
+
     // ==================== Loading 弹窗 ====================
 
     private fun showLoadingDialog() {
@@ -482,6 +577,10 @@ class TranslateHelper(
             translateFinishTimeoutRunnable?.let {
                 handler.removeCallbacks(it)
                 translateFinishTimeoutRunnable = null
+            }
+            msgIdRetryRunnable?.let {
+                handler.removeCallbacks(it)
+                msgIdRetryRunnable = null
             }
             webSocketManager.sendClose()
 

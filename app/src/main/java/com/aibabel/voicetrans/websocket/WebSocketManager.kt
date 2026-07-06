@@ -20,6 +20,22 @@ import okio.ByteString
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+/**
+ * WebSocket 单例管理器
+ *
+ * 功能：
+ * 1. WebSocket 连接管理（连接、断开、重连）
+ * 2. 消息收发（文本帧 + 二进制帧）
+ * 3. 新消息结构解析（type/class 分类）
+ * 4. Base64 音频数据解码（type=binary, class=binary）
+ * 5. 异常断开自动重连（保留 session_id + last_msg_id）
+ *
+ * 重连机制：
+ * - 发送 finish 后标记 isPendingFinish=true
+ * - 异常断开时（isPendingFinish && !isManualDisconnect）自动重连
+ * - 重连使用上次的 session_id
+ * - 重连成功后发送最后一条消息的 msg_id
+ */
 class WebSocketManager private constructor() {
 
     interface WebSocketCallback {
@@ -46,7 +62,10 @@ class WebSocketManager private constructor() {
     private var reconnectRunnable: Runnable? = null
     private var callback: WebSocketCallback? = null
     private var mainHandler: Handler
-    private var currentSessionId: String = ""
+    private var currentSessionId: String = ""       // 当前连接的 session_id
+    private var lastSessionId: String = ""          // 上一次连接的 session_id（重连时复用）
+    private var lastMsgId: String = ""              // 最后收到消息的 msg_id（重连后发送给服务端）
+    private var isPendingFinish = false             // 是否已发送 finish 但未收到响应（异常断开时触发重连）
 
     init {
         gson = Gson()
@@ -87,6 +106,14 @@ class WebSocketManager private constructor() {
 
     fun getSessionId(): String = currentSessionId
 
+    fun getLastMsgId(): String = lastMsgId
+
+    /**
+     * 建立 WebSocket 连接
+     *
+     * 首次连接生成新的 UUID 作为 session_id
+     * 重连时复用 lastSessionId，header 不变
+     */
     fun connect() {
         Log.i(TAG, ">>> WebSocket connect() called")
         if (isConnected && webSocket != null) {
@@ -98,12 +125,21 @@ class WebSocketManager private constructor() {
         Log.i(TAG, "Connecting to: " +if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM)
         Log.i(TAG, "langSource: $langSource, langTarget: $langTarget")
 
-        val sessionId = UUID.randomUUID().toString()
+        val sessionId = if (lastSessionId.isNotEmpty() && reconnectAttempts > 0) {
+            Log.i(TAG, "Reconnecting with last sessionId: $lastSessionId")
+            lastSessionId
+        } else {
+            val newSessionId = UUID.randomUUID().toString()
+            lastSessionId = newSessionId
+            Log.i(TAG, "New SessionId: $newSessionId")
+            newSessionId
+        }
         this.currentSessionId = sessionId
         Log.i(TAG, "SessionId: $sessionId")
 
         val request = Request.Builder()
             .url(if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM)
+//            .url(WS_URL_CN)
             .addHeader("Authorization", Constants.ACCESS_TOKEN)
             .addHeader("langSource", langSource)
             .addHeader("langTarget", langTarget)
@@ -116,6 +152,13 @@ class WebSocketManager private constructor() {
                 Log.e(TAG, "WebSocket connected successfully!")
                 Log.e(TAG, "Response code: " + response.code)
                 isConnected = true
+
+                // 重连且有待处理 finish 时，发送最后一条消息的 msg_id 让服务端续传
+                if (hasConnectedBefore && isPendingFinish && lastMsgId.isNotEmpty()) {
+                    Log.i(TAG, "Reconnected with pending finish, sending lastMsgId: $lastMsgId")
+                    webSocket.send("{\"msg_id\":\"$lastMsgId\"}")
+                }
+
                 reconnectAttempts = 0
 //                sendConnect()
                 mainHandler.post {
@@ -160,6 +203,11 @@ class WebSocketManager private constructor() {
                 Log.e(TAG, "WebSocket closed: $code $reason")
                 isConnected = false
 
+                if (!isManualDisconnect && isPendingFinish && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    Log.i(TAG, "Abnormal close with pending finish, reconnecting...")
+                    reconnect()
+                }
+
                 mainHandler.post {
                     callback?.onDisconnected()
                 }
@@ -181,33 +229,91 @@ class WebSocketManager private constructor() {
 
                 isConnected = false
                 reconnectAttempts++
-               /* if (reconnectAttempts <= 3) {
+
+                if (!isManualDisconnect && isPendingFinish && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                    Log.i(TAG, "WebSocket failure with pending finish, reconnect attempt $reconnectAttempts")
                     reconnect()
-                } else {
+                } else if (!isManualDisconnect) {
+                    // 非主动断开的异常（如 Socket closed），通知 UI 提示用户
                     mainHandler.post {
                         callback?.onError(t.message ?: "Unknown error")
                     }
-                }*/
-                mainHandler.post {
-                    callback?.onError(t.message ?: "Unknown error")
                 }
             }
         })
     }
 
+    /**
+     * 解析服务端发送的文本消息
+     *
+     * 消息格式（JSON）：
+     * {
+     *   "type": "text/binary",       // 消息类型
+     *   "class": "source/target/finish/binary", // 分类
+     *   "text": "...",               // 文本内容或 Base64 音频
+     *   "msg_id": "1",               // 消息序号
+     *   "session_id": "..."          // 会话ID
+     * }
+     *
+     * 处理流程：
+     * 1. type=binary, class=binary  → Base64 解码为音频字节，直接回调 onBinaryData（OkHttp线程）
+     * 2. type=text, class=finish    → 翻译结束，回调 onMessage(RESP_TRANSLATE_FINISH)
+     * 3. 其他 type=text             → 翻译文本结果，回调 onResult
+     * 4. 非 JSON 纯文本             → 回调 onMessage
+     */
     private fun handleTextMessage(text: String) {
-        mainHandler.post {
-            try {
-                val result = gson.fromJson(text, TranslationResult::class.java)
-                if (result != null && result.type != null) {
+        try {
+            val result = gson.fromJson(text, TranslationResult::class.java)
+            if (result != null && result.type != null) {
+                Log.e(TAG, "Received text message: $result")
+                Log.e(TAG,"ISTRUE:${(result.type == "text" && result.classType == "binary")}")
+
+                if (result.msgId != null) {
+                    lastMsgId = result.msgId!!
+                    Log.i(TAG, "Updated lastMsgId: $lastMsgId")
+                }
+
+                if (result.classType == "binary") {
+                    val base64Text = result.text
+                    Log.e(TAG, "Received Base64 audio: $base64Text")
+                    if (!base64Text.isNullOrEmpty()) {
+                        try {
+                            val decodedBytes = android.util.Base64.decode(base64Text, android.util.Base64.DEFAULT)
+                            val hexBuilder = StringBuilder()
+                            val printLen = minOf(decodedBytes.size, 64)
+                            for (i in 0 until printLen) {
+                                hexBuilder.append(String.format("%02X ", decodedBytes[i]))
+                            }
+                            Log.i(TAG, "Decoded Base64 audio, length: ${decodedBytes.size}, first $printLen bytes: ${hexBuilder.toString()}")
+                            callback?.onBinaryData(decodedBytes)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to decode Base64 audio: ${e.message}")
+                        }
+                    }
+                    return
+                }
+
+                if (result.type == "text" && result.classType == "finish") {
+                    isPendingFinish = false
+                    lastMsgId = ""
+                    mainHandler.post {
+                        Log.i(TAG, "Received finish message via text frame")
+                        callback?.onMessage(Constants.RESP_TRANSLATE_FINISH)
+                    }
+                    return
+                }
+
+                mainHandler.post {
                     Log.e(TAG, "Parsed result: $result")
                     callback?.onResult(result)
-                    return@post
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Not a JSON result, treating as text message")
+                return
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Not a JSON result, treating as text message")
+        }
 
+        mainHandler.post {
             callback?.onMessage(text)
         }
     }
@@ -226,7 +332,7 @@ class WebSocketManager private constructor() {
         for (i in 0 until printLen) {
             hexBuilder.append(String.format("%02X ", data[i]))
         }
-        Log.i(TAG2, ">>> Sending audio data: (first $printLen bytes): ${hexBuilder.toString()}")
+//        Log.i(TAG2, ">>> Sending audio data: (first $printLen bytes): ${hexBuilder.toString()}")
         val sent = webSocket!!.send(ByteString.of(*data))
         if (sent) {
             Log.i(TAG2, "Audio data sent successfully, size=${data.size}, queue size=" + webSocket!!.queueSize())
@@ -256,7 +362,12 @@ class WebSocketManager private constructor() {
     }
 
     fun sendFinish() {
+        isPendingFinish = true
         sendCommand(Constants.CMD_FINISH)
+    }
+
+    fun setPendingFinish(pending: Boolean) {
+        isPendingFinish = pending
     }
 
     fun sendConnect() {
@@ -270,6 +381,10 @@ class WebSocketManager private constructor() {
 
     fun disconnect() {
         isManualDisconnect = true
+        isPendingFinish = false
+        lastMsgId = ""
+        lastSessionId = ""
+        reconnectAttempts = 0
         reconnectRunnable?.let {
             mainHandler.removeCallbacks(it)
             reconnectRunnable = null

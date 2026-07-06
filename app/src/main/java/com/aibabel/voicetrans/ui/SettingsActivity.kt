@@ -3,6 +3,7 @@ package com.aibabel.voicetrans.ui
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.view.KeyEvent
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.databinding.ActivitySettingsBinding
 import com.aibabel.voicetrans.util.Constants
@@ -50,7 +51,16 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
             }
         }
     }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
 
+            136 ->{
+                finish()
+                true
+            }
+            else -> false
+        }
+    }
     override fun initListener() {
         binding.btnBack.setOnClickListener { finish() }
 
@@ -77,7 +87,10 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
                 else -> Constants.MODE_S2S
             }
             prefs.edit().putString(KEY_SESSION_MODE, sessionMode).apply()
-            ToastUtil.showShort(if (sessionMode == Constants.MODE_S2T) "已切换到同声传译" else "已切换到交流模式")
+            
+            val intent = Intent(ACTION_SESSION_MODE_CHANGED)
+            intent.putExtra(EXTRA_SESSION_MODE, sessionMode)
+            sendBroadcast(intent)
         }
 
         binding.layoutCheckUpdate.setOnClickListener {
@@ -104,6 +117,8 @@ class SettingsActivity : BaseVBActivityOpt<SettingsViewModel, ActivitySettingsBi
         const val MODE_CHINESE = 1      // 显示中文
         
         const val ACTION_SECONDARY_MODE_CHANGED = "com.aibabel.voicetrans.ACTION_SECONDARY_MODE_CHANGED"
+        const val ACTION_SESSION_MODE_CHANGED = "com.aibabel.voicetrans.ACTION_SESSION_MODE_CHANGED"
         const val EXTRA_MODE = "mode"
+        const val EXTRA_SESSION_MODE = "session_mode"
     }
 }

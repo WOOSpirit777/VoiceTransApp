@@ -1,49 +1,48 @@
 @echo off
-chcp 65001 >nul
 echo ========================================
-echo   VoiceTransApp 编译安装启动脚本
+echo   VoiceTransApp Build & Install & Run
 echo ========================================
 
 echo.
-echo [1/4] 编译 Debug APK...
+echo [1/4] Building Debug APK...
 cd /d d:\workspace4ai\VoiceTransApp
 call .\gradlew assembleDebug
 if %errorlevel% neq 0 (
-    echo [错误] 编译失败！
+    echo [ERROR] Build failed!
     pause
     exit /b 1
 )
 
 echo.
-echo [2/4] 查找最新 APK...
+echo [2/4] Finding latest APK...
 for /f "delims=" %%f in ('dir /b /s /o-d "app\build\outputs\apk\debug\*.apk"') do (
     set "APK_PATH=%%f"
     goto :found
 )
 :found
 if "%APK_PATH%"=="" (
-    echo [错误] 未找到 APK 文件！
+    echo [ERROR] APK file not found!
     pause
     exit /b 1
 )
-echo APK 路径: %APK_PATH%
+echo APK path: %APK_PATH%
 
 echo.
-echo [3/4] 安装 APK 到设备...
+echo [3/4] Installing APK to device...
 adb install -r "%APK_PATH%"
 if %errorlevel% neq 0 (
-    echo [错误] 安装失败！请检查设备是否已连接。
-    echo 运行 adb devices 查看已连接设备。
+    echo [ERROR] Install failed! Please check device connection.
+    echo Run "adb devices" to see connected devices.
     pause
     exit /b 1
 )
 
 echo.
-echo [4/4] 启动 App...
+echo [4/4] Starting App...
 adb shell am start -n com.aibabel.voicetrans/.ui.MainActivity
 
 echo.
 echo ========================================
-echo   完成！App 已启动
+echo   Done! App started successfully
 echo ========================================
 pause

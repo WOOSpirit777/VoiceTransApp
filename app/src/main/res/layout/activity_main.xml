@@ -117,18 +117,19 @@
         android:clipToPadding="false"
         android:padding="16dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        app:layout_constraintBottom_toTopOf="@id/bottomBarrier"
         app:layout_constraintTop_toBottomOf="@id/tvStatus" />
 
     <!-- ========== 主屏单语言显示区 ========== -->
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/svMainDisplay"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-
         android:layout_marginTop="38dp"
         android:fillViewport="true"
-        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@id/bottomBarrier"
         app:layout_constraintTop_toBottomOf="@id/tvStatus">
 
         <LinearLayout
@@ -146,18 +147,21 @@
                 android:textColor="@color/text_primary"
                 android:textSize="24sp"
                 android:lineSpacingExtra="8dp" />
-        </LinearLayout>
-    </ScrollView>
 
-    <!-- ========== 底部操作区 ========== -->
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- ========== 底部操作区（同声传译模式） ========== -->
     <LinearLayout
-        android:id="@+id/bottomContainer"
+        android:id="@+id/bottomContainerS2t"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <com.google.android.material.button.MaterialButton
@@ -192,6 +196,42 @@
             app:cornerRadius="21dp" />
     </LinearLayout>
 
+    <!-- ========== 底部操作区（交流模式） ========== -->
+    <LinearLayout
+        android:id="@+id/bottomContainerS2s"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="32dp"
+        android:paddingVertical="16dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/btnMainScreen"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:background="@drawable/bg_circle_button_secondary"
+            android:backgroundTint="@null"
+            android:text="@string/chinese"
+            android:textColor="@color/text_secondary"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/btnSecondaryScreen"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginStart="48dp"
+            android:background="@drawable/bg_circle_button_main"
+            android:backgroundTint="@null"
+            android:text="@string/indonesian"
+            android:textColor="@color/text_secondary"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/tvRecordHint"
         android:layout_width="wrap_content"
@@ -201,9 +241,50 @@
         android:textColor="@color/text_hint"
         android:textSize="13sp"
         android:visibility="@{BuildConfig.DEBUG ? View.VISIBLE : View.GONE}"
-        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        app:layout_constraintBottom_toTopOf="@id/bottomBarrier"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/bottomBarrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="top"
+        app:constraint_referenced_ids="bottomContainerS2t,bottomContainerS2s" />
+
+        <RelativeLayout
+            android:id="@+id/recording_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:background="@color/transparent">
+            <com.aibabel.voicetrans.utils.SoundWaveView
+                android:id="@+id/bigSoundView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerHorizontal="true"
+                android:layout_alignParentBottom="true"
+                android:layout_marginBottom="180dp"
+                android:paddingHorizontal="20dp"
+                android:paddingVertical="8dp"
+                app:maxVolumeBarHeight="45dp"
+                app:minVolumeBarHeight="4dp"
+                app:volumeBarColor="@color/accent_gold"
+                app:volumeBarHalfWidth="1.5dp"
+                app:volumeBarMargin="3dp"
+                app:volumeCount="28"
+                app:volumeIdleCount="16" />
+            <TextView
+                android:id="@+id/tv_recording_hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerHorizontal="true"
+                android:layout_below="@id/bigSoundView"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/accent_gold"
+                android:text="请说标准普通话"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+        </RelativeLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

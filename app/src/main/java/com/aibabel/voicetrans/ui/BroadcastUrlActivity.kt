@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
+import android.view.KeyEvent
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.databinding.ActivityBroadcastUrlBinding
 import com.aibabel.voicetrans.viewmodel.BroadcastUrlViewModel
@@ -35,7 +36,16 @@ class BroadcastUrlActivity : BaseVBActivityOpt<BroadcastUrlViewModel, ActivityBr
     override fun initListener() {}
 
     override fun useEventBus(): Boolean = false
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
 
+            136 ->{
+                finish()
+                true
+            }
+            else -> false
+        }
+    }
     private fun generateQrCode(content: String): Bitmap? {
         return try {
             val hints = HashMap<EncodeHintType, Any>()

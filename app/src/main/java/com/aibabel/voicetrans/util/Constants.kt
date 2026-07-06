@@ -5,7 +5,7 @@ import commonutil.ContentProviderUtil
 object Constants {
 //    const val WS_URL_CN = "ws://192.168.1.226:18050/speech/mode/ws_s2s"
     const val WS_URL_CN = "wss://joner-trans.aibabel.cn/speech/mode/ws_s2s"
-    const val WS_URL_COM = "wss://joner-trans.aibabel.com/speech/mode/ws"
+    const val WS_URL_COM = "wss://joner-trans.aibabel.com/speech/mode/ws_s2s"
     
      var WS_URL = if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM
 
@@ -38,7 +38,7 @@ object Constants {
     const val CLASS_TARGET = "target"
     const val CLASS_TTS = "tts"
 
-    const val TRANSLATE_FINISH_TIMEOUT_MS = 40000L
+    const val TRANSLATE_FINISH_TIMEOUT_MS = 5000L
 
     const val MODE_S2S = "s2s"
     const val MODE_S2T = "s2t"

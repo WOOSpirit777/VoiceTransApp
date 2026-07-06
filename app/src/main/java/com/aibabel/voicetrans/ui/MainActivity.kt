@@ -10,9 +10,12 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
+import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.ScrollView
+import android.widget.LinearLayout
+import androidx.core.widget.NestedScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
@@ -23,7 +26,10 @@ import com.aibabel.voicetrans.databinding.ActivityMainBinding
 import com.aibabel.voicetrans.model.ChatMessage
 import com.aibabel.voicetrans.util.Constants
 import com.aibabel.voicetrans.viewmodel.MainViewModel
+import com.apkfuns.logutils.LogUtils
 import com.quniu.baselib.activity.BaseVBRefreshActivityOpt
+import commonutil.CommonUtils
+import commonutil.VolumeController
 import netlib.request.Page
 
 class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding>(
@@ -39,9 +45,13 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
     private lateinit var btnSettings: ImageButton
     private lateinit var btnClear: TextView
     private lateinit var audioButtonView: AudioButtonView
-    private lateinit var svMainDisplay: ScrollView
+    private lateinit var svMainDisplay: NestedScrollView
     private lateinit var tvMainDisplayLang: TextView
     private lateinit var tvMainDisplayText: TextView
+    private lateinit var btnMainScreen: Button
+    private lateinit var btnSecondaryScreen: Button
+    private lateinit var bottomContainerS2t: LinearLayout
+    private lateinit var bottomContainerS2s: LinearLayout
 
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var prefs: SharedPreferences
@@ -49,6 +59,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
     private lateinit var displayManager: SecondaryDisplayManager
     private lateinit var translateHelper: TranslateHelper
     private lateinit var modeChangeReceiver: BroadcastReceiver
+    private lateinit var sessionModeReceiver: BroadcastReceiver
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -60,11 +71,15 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
             displayManager.showPresentation(mode)
         }
         registerReceiver(modeChangeReceiver, IntentFilter(SettingsActivity.ACTION_SECONDARY_MODE_CHANGED))
+        registerReceiver(sessionModeReceiver, IntentFilter(SettingsActivity.ACTION_SESSION_MODE_CHANGED))
+        updateSessionMode()
+        updateS2sButtonText()
     }
 
     override fun onPause() {
         super.onPause()
         unregisterReceiver(modeChangeReceiver)
+        unregisterReceiver(sessionModeReceiver)
 //        displayManager.dismissPresentation()
     }
 
@@ -73,7 +88,54 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         displayManager.release()
         translateHelper.release()
     }
+    private var physicalKeyPressedButton: Button? = null
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            134 -> {
+                if (!translateHelper.isRecording() && physicalKeyPressedButton == null) {
+                    startRecordingByPhysicalKey(btnMainScreen)
+                }
+                true
+            }
+            135 -> {
+                if (!translateHelper.isRecording() && physicalKeyPressedButton == null) {
+                    startRecordingByPhysicalKey(btnSecondaryScreen)
+                }
+                true
+            }
+            136 ->{
+                finish()
+                true
+            }
+            else -> false
+        }
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            134, 135 -> {
+                stopRecordingByPhysicalKey()
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun startRecordingByPhysicalKey(button: Button) {
+        val lang = if (button.id == R.id.btnMainScreen) getMainScreenLang() else getSecondaryScreenLang()
+        translateHelper.startRecordingWithLang(lang)
+        animateButtonPress(button, true)
+        physicalKeyPressedButton = button
+    }
+
+    private fun stopRecordingByPhysicalKey() {
+        physicalKeyPressedButton?.let {
+            translateHelper.stopRecording()
+            animateButtonRelease(it)
+        }
+        physicalKeyPressedButton = null
+    }
     override fun initView() {
         prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
 
@@ -89,6 +151,10 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         svMainDisplay = binding.svMainDisplay
         tvMainDisplayLang = binding.tvMainDisplayLang
         tvMainDisplayText = binding.tvMainDisplayText
+        btnMainScreen = binding.btnMainScreen
+        btnSecondaryScreen = binding.btnSecondaryScreen
+        bottomContainerS2t = binding.bottomContainerS2t
+        bottomContainerS2s = binding.bottomContainerS2s
 
         chatAdapter = ChatAdapter()
         binding.rvChat.layoutManager = LinearLayoutManager(this)
@@ -113,6 +179,9 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
             tvMainDisplayLang = tvMainDisplayLang,
             tvRecordHint = tvRecordHint,
             audioButtonView = audioButtonView,
+            bigSoundView = binding.bigSoundView,
+
+            recordingContainer = binding.recordingContainer,
             onStatusUpdate = { text, bg, fg -> updateStatus(text, bg, fg) },
             onRecordingStateChange = { enabled ->
                 btnChinese.isEnabled = enabled
@@ -130,9 +199,21 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
                     displayManager.showPresentation(mode)
                     translateHelper.updateMainDisplayLanguage()
                     translateHelper.clearDisplay()
+                    updateS2sButtonText()
                 }
             }
         }
+
+        sessionModeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == SettingsActivity.ACTION_SESSION_MODE_CHANGED) {
+                    updateSessionMode()
+                }
+            }
+        }
+
+        updateSessionMode()
+        updateS2sButtonText()
 
         mainHandler.postDelayed({ displayManager.detectAndInit() }, 500)
     }
@@ -181,6 +262,40 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
             override fun onRecordingEnd() { translateHelper.stopRecording() }
         })
 
+        btnMainScreen.setOnLongClickListener {
+            val lang = getMainScreenLang()
+            translateHelper.startRecordingWithLang(lang)
+            animateButtonPress(btnMainScreen, true)
+            true
+        }
+        btnMainScreen.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> animateButtonPress(btnMainScreen, false)
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    translateHelper.stopRecording()
+                    animateButtonRelease(btnMainScreen)
+                }
+            }
+            false
+        }
+
+        btnSecondaryScreen.setOnLongClickListener {
+            val lang = getSecondaryScreenLang()
+            translateHelper.startRecordingWithLang(lang)
+            animateButtonPress(btnSecondaryScreen, true)
+            true
+        }
+        btnSecondaryScreen.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> animateButtonPress(btnSecondaryScreen, false)
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    translateHelper.stopRecording()
+                    animateButtonRelease(btnSecondaryScreen)
+                }
+            }
+            false
+        }
+
         chatAdapter.setOnItemClickListener(object : ChatAdapter.OnItemClickListener {
             override fun onItemClick(message: ChatMessage) {
                 Log.e(TAG, "Message clicked: ${message.id}")
@@ -218,6 +333,54 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
             Constants.LANG_ZH -> btnChinese.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
             Constants.LANG_ID -> btnIndonesian.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
         }
+    }
+
+    private fun updateSessionMode() {
+        val sessionMode = prefs.getString(SettingsActivity.KEY_SESSION_MODE, Constants.MODE_S2S)
+        if (sessionMode == Constants.MODE_S2S) {
+            bottomContainerS2t.visibility = View.GONE
+            bottomContainerS2s.visibility = View.VISIBLE
+        } else {
+            bottomContainerS2t.visibility = View.VISIBLE
+            bottomContainerS2s.visibility = View.GONE
+        }
+    }
+
+    private fun updateS2sButtonText() {
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        if (secondaryMode == SettingsActivity.MODE_INDONESIAN) {
+            btnMainScreen.text = getString(R.string.chinese)
+            btnSecondaryScreen.text = getString(R.string.indonesian)
+        } else {
+            btnMainScreen.text = getString(R.string.indonesian)
+            btnSecondaryScreen.text = getString(R.string.chinese)
+        }
+    }
+
+    private fun getMainScreenLang(): String {
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        return if (secondaryMode == SettingsActivity.MODE_INDONESIAN) Constants.LANG_ZH else Constants.LANG_ID
+    }
+
+    private fun getSecondaryScreenLang(): String {
+        val secondaryMode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
+        return if (secondaryMode == SettingsActivity.MODE_INDONESIAN) Constants.LANG_ID else Constants.LANG_ZH
+    }
+
+    private fun animateButtonPress(button: android.widget.Button, recording: Boolean) {
+        button.animate()
+            .scaleX(if (recording) 0.85f else 0.95f)
+            .scaleY(if (recording) 0.85f else 0.95f)
+            .setDuration(150)
+            .start()
+    }
+
+    private fun animateButtonRelease(button: android.widget.Button) {
+        button.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(150)
+            .start()
     }
 
     private fun checkPermissions() {

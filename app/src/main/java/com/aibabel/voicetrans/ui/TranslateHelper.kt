@@ -7,21 +7,22 @@ import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.ScrollView
+import android.widget.RelativeLayout
+import androidx.core.widget.NestedScrollView
 import android.widget.TextView
-import android.widget.Toast
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.audio.AudioPlayerManager
 import com.aibabel.voicetrans.audio.AudioRecorderManager
-import com.aibabel.voicetrans.data.AudioSendManager
 import com.aibabel.voicetrans.data.AudioSegmentRepository
+import com.aibabel.voicetrans.data.AudioSendManager
 import com.aibabel.voicetrans.data.TranslationSessionRepository
 import com.aibabel.voicetrans.model.ChatMessage
 import com.aibabel.voicetrans.model.TranslationResult
 import com.aibabel.voicetrans.util.Constants
+import com.aibabel.voicetrans.utils.DBCalculator
 import com.aibabel.voicetrans.utils.LanguageUtils
+import com.aibabel.voicetrans.utils.SoundWaveView
 import com.aibabel.voicetrans.websocket.WebSocketManager
-import com.apkfuns.logutils.LogUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,7 +34,6 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -48,11 +48,13 @@ class TranslateHelper(
     private val handler: Handler,
     private val chatAdapter: ChatAdapter,
     private val secondaryDisplayManager: SecondaryDisplayManager,
-    private val svMainDisplay: ScrollView,
+    private val svMainDisplay: NestedScrollView,
     private val tvMainDisplayText: TextView,
     private val tvMainDisplayLang: TextView,
     private val tvRecordHint: TextView,
     private val audioButtonView: AudioButtonView,
+    private val bigSoundView: SoundWaveView,
+    private val recordingContainer: RelativeLayout,
     private val onStatusUpdate: (String, Int, Int) -> Unit,
     private val onRecordingStateChange: (Boolean) -> Unit
 ) {
@@ -69,6 +71,7 @@ class TranslateHelper(
     private var loadingDialog: AlertDialog? = null
     private var translateFinishTimeoutRunnable: Runnable? = null
     private var recordTimeoutRunnable: Runnable? = null
+    private var scrollRunnable: Runnable? = null
 
     // 录音分段发送相关
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -134,6 +137,7 @@ class TranslateHelper(
             audioPlayerManager.stop()
             Log.i(TAG, "Stopped TTS playback to start recording")
         }
+        recordingContainer.visibility = View.VISIBLE
 
         isRecording = true
         isProcessing.set(true)
@@ -176,6 +180,14 @@ class TranslateHelper(
         handler.postDelayed(recordTimeoutRunnable!!, 60000)
     }
 
+    fun startRecordingWithLang(lang: String) {
+        if (currentLang != lang) {
+            setCurrentLang(lang)
+        }
+        startRecording()
+
+    }
+
     fun stopRecording() {
         if (!isRecording) return
 
@@ -199,11 +211,11 @@ class TranslateHelper(
         // 先初始化超时 Runnable，避免协程内使用时还未赋值导致 NPE
         translateFinishTimeoutRunnable = Runnable {
             Log.e(TAG, "Translate finish timeout after ${Constants.TRANSLATE_FINISH_TIMEOUT_MS}ms")
-//            dismissLoadingDialog()
-//            audioPlayerManager.stopStreamingPlayback()
-//            isProcessing.set(false)
-//            tvRecordHint.text = getMainString(R.string.translate_timeout)
-//            webSocketManager.sendClose()
+            dismissLoadingDialog()
+            audioPlayerManager.stopStreamingPlayback()
+            isProcessing.set(false)
+            tvRecordHint.text = getMainString(R.string.translate_timeout)
+            webSocketManager.sendClose()
         }
 
         // 发送finish并启动播放
@@ -250,7 +262,7 @@ class TranslateHelper(
                 }
             }
             //结束录制设置翻译超时计时
-            handler.postDelayed(translateFinishTimeoutRunnable!!, Constants.TRANSLATE_FINISH_TIMEOUT_MS)
+//            handler.postDelayed(translateFinishTimeoutRunnable!!, Constants.TRANSLATE_FINISH_TIMEOUT_MS)
         }
 
     }
@@ -351,6 +363,7 @@ class TranslateHelper(
         override fun onError(error: String) {
             handler.post {
                 dismissLoadingDialog()
+                recordingContainer.visibility = View.GONE
                 onStatusUpdate("连接错误: $error", 0xFFFFEBEE.toInt(), 0xFFC62828.toInt())
                 Log.e(TAG, "WebSocket error: $error")
                 isRecording = false
@@ -506,7 +519,18 @@ class TranslateHelper(
     }
 
     // ==================== 音频回调 ====================
-
+    /**
+     * 将 ByteArray 转换为 ShortArray
+     */
+    private fun ByteArrayToShortArray(byteArray: ByteArray): ShortArray {
+        val shortArray = ShortArray(byteArray.size / 2)
+        for (i in 0 until shortArray.size) {
+            val byte1 = byteArray[i * 2].toInt() and 0xFF
+            val byte2 = byteArray[i * 2 + 1].toInt() and 0xFF
+            shortArray[i] = ((byte2 shl 8) or byte1).toShort()
+        }
+        return shortArray
+    }
     private val audioRecordCallback = object : AudioRecorderManager.AudioRecordCallback {
         override fun onRecordingStart() {
             Log.e(TAG, "Recording started, sessionId=$currentSessionId")
@@ -516,6 +540,11 @@ class TranslateHelper(
         override fun onRecordingData(data: ByteArray, size: Int) {
             val index = segmentIndex.getAndIncrement()
             val actualData = if (size < data.size) data.copyOf(size) else data
+                // 将 ByteArray 转换为 ShortArray 以匹配 DBCalculator 的要求
+                val shortArray = ByteArrayToShortArray(actualData)
+                val volume = DBCalculator().calculateDB(shortArray, shortArray.size).toInt() + 10
+                // 使用 volume 变量更新声音视图
+               bigSoundView.handleVolume(volume)
 
             if (directSendMode) {
                 // 直接发送模式：边录边发，收到数据立即通过WebSocket发送
@@ -527,6 +556,9 @@ class TranslateHelper(
         }
 
         override fun onRecordingStop(fullData: ByteArray?) {
+            handler.post {
+                recordingContainer.visibility = View.GONE
+            }
             Log.e(TAG, "Recording stopped, total: ${fullData?.size ?: 0} bytes")
             if (currentMessage != null && fullData != null && fullData.isNotEmpty()) {
                 currentMessage!!.sourceAudioData = fullData
@@ -536,6 +568,7 @@ class TranslateHelper(
 
         override fun onRecordingError(error: String) {
             handler.post {
+                recordingContainer.visibility = View.GONE
                 Log.e(TAG, "Recording error: $error")
                 isRecording = false
                 isProcessing.set(false)
@@ -597,7 +630,12 @@ class TranslateHelper(
         }
 
         tvMainDisplayText.text = textToShow
-        svMainDisplay.post { svMainDisplay.fullScroll(View.FOCUS_DOWN) }
+        // 防抖滚动：取消上一次未执行的滚动，延迟50ms后执行平滑滚动
+        scrollRunnable?.let { handler.removeCallbacks(it) }
+        scrollRunnable = Runnable {
+            svMainDisplay.smoothScrollTo(0, svMainDisplay.getChildAt(0).height)
+        }
+        handler.postDelayed(scrollRunnable!!, 50)
     }
 
     fun clearDisplay() {

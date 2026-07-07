@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">印尼语音翻译</string>
+    <string name="app_name">印尼语翻译</string>
     <string name="btn_voice_hint">长按按钮开始录音</string>
     <string name="recording">正在录音...</string>
     <string name="connected">已连接</string>

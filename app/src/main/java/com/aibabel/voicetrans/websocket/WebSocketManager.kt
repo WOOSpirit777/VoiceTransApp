@@ -139,7 +139,7 @@ class WebSocketManager private constructor() {
 
         val request = Request.Builder()
             .url(if (ContentProviderUtil.isInCN()) WS_URL_CN else WS_URL_COM)
-//            .url(WS_URL_CN)
+//            .url(WS_URL_COM)
             .addHeader("Authorization", Constants.ACCESS_TOKEN)
             .addHeader("langSource", langSource)
             .addHeader("langTarget", langTarget)
@@ -234,9 +234,16 @@ class WebSocketManager private constructor() {
                     Log.i(TAG, "WebSocket failure with pending finish, reconnect attempt $reconnectAttempts")
                     reconnect()
                 } else if (!isManualDisconnect) {
-                    // 非主动断开的异常（如 Socket closed），通知 UI 提示用户
+                    // 非主动断开的异常（如 Socket closed/EOFException），通知 UI 提示用户
                     mainHandler.post {
-                        callback?.onError(t.message ?: "Unknown error")
+                        val errorMsg = when {
+                            t.message?.contains("closed", ignoreCase = true) == true -> "连接已关闭"
+                            t.message?.contains("timeout", ignoreCase = true) == true -> "连接超时"
+                            t.javaClass.simpleName == "EOFException" -> "服务端已断开"
+                            t.message != null -> t.message!!
+                            else -> "连接异常"
+                        }
+                        callback?.onError(errorMsg)
                     }
                 }
             }

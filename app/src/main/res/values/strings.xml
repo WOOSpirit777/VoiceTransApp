@@ -40,6 +40,6 @@
     <string name="session_mode">会话模式</string>
     <string name="session_mode_s2s">交流模式</string>
     <string name="session_mode_s2t">同声传译</string>
-    <string name="waiting_for_chinese">等待中文内容...</string>
-    <string name="waiting_for_indonesian">等待印尼语内容...</string>
+    <string name="waiting_for_chinese">等待翻译结果...</string>
+    <string name="waiting_for_indonesian">等待翻译结果...</string>
 </resources>

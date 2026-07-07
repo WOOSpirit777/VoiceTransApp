@@ -156,7 +156,7 @@ class WebSocketManager private constructor() {
                 // 重连且有待处理 finish 时，发送最后一条消息的 msg_id 让服务端续传
                 if (hasConnectedBefore && isPendingFinish && lastMsgId.isNotEmpty()) {
                     Log.i(TAG, "Reconnected with pending finish, sending lastMsgId: $lastMsgId")
-                    webSocket.send("{\"msg_id\":\"$lastMsgId\"}")
+                    sendCommand("{\"msg_id\":\"$lastMsgId\"}")
                 }
 
                 reconnectAttempts = 0

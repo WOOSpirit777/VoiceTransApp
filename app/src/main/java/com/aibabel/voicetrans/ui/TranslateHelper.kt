@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.RelativeLayout
 import androidx.core.widget.NestedScrollView
 import android.widget.TextView
+import com.aibabel.voicetrans.BuildConfig
 import com.aibabel.voicetrans.R
 import com.aibabel.voicetrans.audio.AudioPlayerManager
 import com.aibabel.voicetrans.audio.AudioRecorderManager
@@ -65,6 +66,8 @@ class TranslateHelper(
     private val audioPlayerManager = AudioPlayerManager.getInstance()
 
     private val ttsAudioBuffer = ByteArrayOutputStream()
+    // 缓存 WebSocket 未连接时的录音数据，连接成功后一次性发送
+    private val pendingAudioBuffer = ByteArrayOutputStream()
     private val isProcessing = AtomicBoolean(false)
     private var currentMessage: ChatMessage? = null
     private var currentLang = Constants.LANG_ZH
@@ -128,14 +131,6 @@ class TranslateHelper(
     fun isRecording() = isRecording
 
     fun startRecording() {
-        if (!webSocketManager.isConnected()) {
-            // 连接前读取最新的会话模式
-            val sessionMode = prefs.getString(SettingsActivity.KEY_SESSION_MODE, Constants.MODE_S2S)
-            webSocketManager.setMode(sessionMode ?: Constants.MODE_S2S)
-            onStatusUpdate("连接中...", 0xFFFFF3E0.toInt(), 0xFFE65100.toInt())
-            webSocketManager.connect()
-        }
-
         if (audioPlayerManager.isPlaying()) {
             audioPlayerManager.stop()
             Log.i(TAG, "Stopped TTS playback to start recording")
@@ -145,10 +140,28 @@ class TranslateHelper(
         isRecording = true
         isProcessing.set(true)
 
-        tvRecordHint.text = getMainString(R.string.recording)
+        // 根据当前语言显示对应的录音提示词
+        tvRecordHint.text = when (currentLang) {
+            Constants.LANG_ID -> "正在识别印尼语"
+            Constants.LANG_ZH -> "正在识别中文"
+            else -> getMainString(R.string.recording)
+        }
         onRecordingStateChange(false)
 
-        // 使用WebSocket连接时创建的sessionId
+        // 清空缓存区（用于缓存 WebSocket 未连接时的录音数据）
+        synchronized(pendingAudioBuffer) {
+            pendingAudioBuffer.reset()
+        }
+
+        // 如果 WebSocket 未连接，启动连接（录音和连接并行进行）
+        if (!webSocketManager.isConnected()) {
+            val sessionMode = prefs.getString(SettingsActivity.KEY_SESSION_MODE, Constants.MODE_S2S)
+            webSocketManager.setMode(sessionMode ?: Constants.MODE_S2S)
+            onStatusUpdate("连接中...", 0xFFFFF3E0.toInt(), 0xFFE65100.toInt())
+            webSocketManager.connect()
+        }
+
+        // 使用 WebSocket 连接时创建的 sessionId（未连接时为空，连接成功后更新）
         currentSessionId = webSocketManager.getSessionId()
         Log.i(TAG,"currentSessionId =$currentSessionId")
         segmentIndex.set(0)
@@ -332,6 +345,23 @@ class TranslateHelper(
                 onStatusUpdate("已连接", 0xFFE8F5E9.toInt(), 0xFF2E7D32.toInt())
                 Log.i(TAG, "WebSocket connected")
             }
+            // 连接成功后更新 sessionId
+            currentSessionId = webSocketManager.getSessionId()
+            sendManager.setSessionId(currentSessionId)
+            // 如果有缓存的录音数据，发送出去
+            synchronized(pendingAudioBuffer) {
+                if (pendingAudioBuffer.size() > 0) {
+                    val bufferedData = pendingAudioBuffer.toByteArray()
+                    pendingAudioBuffer.reset()
+                    Log.i(TAG, "WebSocket connected, sending buffered audio data: ${bufferedData.size} bytes")
+                    if (directSendMode) {
+                        webSocketManager.sendAudioData(bufferedData)
+                    } else {
+                        val index = segmentIndex.getAndIncrement()
+                        sendManager.saveAndSend(currentSessionId, index, bufferedData)
+                    }
+                }
+            }
         }
 
         override fun onDisconnected() {
@@ -491,9 +521,9 @@ class TranslateHelper(
      * 发送最后一条消息的 msg_id 请求续传
      *
      * 触发条件：发送 finish 后 5 秒未收到服务端 finish 响应
-     * 重试次数：最多 2 次
+     * 重试次数：最多 5 次
      * 每次间隔：3 秒
-     * 2 次后仍未收到 → 手动结束对话
+     * 5 次后仍未收到 → 手动结束对话
      */
     private fun sendLastMsgIdAndRetry() {
         val lastMsgId = webSocketManager.getLastMsgId()
@@ -508,8 +538,10 @@ class TranslateHelper(
         webSocketManager.sendCommand("{\"msg_id\":\"$lastMsgId\"}")
 
         msgIdRetryRunnable = Runnable {
-            if (msgIdRetryCount >= 2) {
-                Log.e(TAG, "[MsgIdRetry] 已重试 2 次，仍然未收到 finish，手动结束对话")
+            if (msgIdRetryCount >= 5) {
+                if (BuildConfig.DEBUG)
+                    Toast.makeText(activity, "已重试 5 次，耗时20秒，仍然未收到 finish，手动结束对话", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "[MsgIdRetry] 已重试 5 次，仍然未收到 finish，手动结束对话")
                 finishTranslationManually()
             } else {
                 sendLastMsgIdAndRetry()
@@ -645,12 +677,19 @@ class TranslateHelper(
                 // 使用 volume 变量更新声音视图
                bigSoundView.handleVolume(volume)
 
-            if (directSendMode) {
-                // 直接发送模式：边录边发，收到数据立即通过WebSocket发送
-                val sent = webSocketManager.sendAudioData(actualData)
+            if (webSocketManager.isConnected()) {
+                // WebSocket 已连接，直接发送
+                if (directSendMode) {
+                    webSocketManager.sendAudioData(actualData)
+                } else {
+                    sendManager.saveAndSend(currentSessionId, index, actualData)
+                }
             } else {
-                // 原逻辑：录音数据先入库，再通过发送队列发送
-                sendManager.saveAndSend(currentSessionId, index, actualData)
+                // WebSocket 未连接，缓存到 pendingAudioBuffer，连接成功后发送
+                synchronized(pendingAudioBuffer) {
+                    pendingAudioBuffer.write(actualData)
+                }
+                Log.i(TAG, "WebSocket not connected, buffering audio data. Pending size: ${pendingAudioBuffer.size()}")
             }
         }
 

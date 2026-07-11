@@ -63,13 +63,20 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    override fun onStart() {
+        super.onStart()
+        displayManager.onStart()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        displayManager.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         translateHelper.updateMainDisplayLanguage()
-        if (displayManager.isDualScreenAvailable()) {
-            val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
-            displayManager.showPresentation(mode)
-        }
+        displayManager.detectAndInit()
         registerReceiver(modeChangeReceiver, IntentFilter(SettingsActivity.ACTION_SECONDARY_MODE_CHANGED))
         registerReceiver(sessionModeReceiver, IntentFilter(SettingsActivity.ACTION_SESSION_MODE_CHANGED))
         updateSessionMode()
@@ -152,6 +159,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         }, 1000)
     }
     override fun initView() {
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
 
         tvStatus = binding.tvStatus

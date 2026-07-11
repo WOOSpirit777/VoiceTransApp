@@ -1,7 +1,13 @@
 package com.aibabel.voicetrans.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.util.DisplayMetrics
@@ -10,7 +16,7 @@ import android.view.Display
 
 /**
  * 副屏显示管理器
- * 负责副屏检测、Presentation显示/隐藏、开关副屏广播
+ * 负责副屏检测、Presentation显示/隐藏、开关副屏广播、HALL传感器监听
  */
 class SecondaryDisplayManager(
     private val activity: Activity,
@@ -21,6 +27,30 @@ class SecondaryDisplayManager(
     private var secondaryDisplay: Display? = null
     private var isDualScreen = false
     private var currentMode = 0
+    private var isProcessingDisplayChange = false
+    private var pendingDetectRunnable: Runnable? = null
+    private var isHallSensorRegistered = false
+    private var lastHallState = -1  // -1: 未知, 0: 打开(无磁铁), 1: 合上(有磁铁)
+    private val HALL_THRESHOLD = 50.0f  // 磁场强度阈值(μT)，超过此值认为磁铁靠近
+    private var userPresentReceiver: android.content.BroadcastReceiver? = null
+    private var isUserPresentRegistered = false
+
+    private val hallSensorListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent?) {
+            event?.let {
+                // 磁力计返回三个轴向的磁场强度，取绝对值最大的
+                val maxValue = maxOf(Math.abs(it.values[0]), Math.abs(it.values[1]), Math.abs(it.values[2]))
+                val state = if (maxValue > HALL_THRESHOLD) 1 else 0
+                Log.d(TAG, "HALL 磁场强度: x=${it.values[0]}, y=${it.values[1]}, z=${it.values[2]}, max=$maxValue, state=$state")
+                if (state != lastHallState) {
+                    lastHallState = state
+                    onHallStateChanged(state)
+                }
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
 
     val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {
@@ -49,17 +79,140 @@ class SecondaryDisplayManager(
 
         override fun onDisplayChanged(displayId: Int) {
             Log.e(TAG, "Display changed: $displayId")
+            if (secondaryDisplay?.displayId == displayId || displayId == Display.DEFAULT_DISPLAY) {
+                val displayManager = activity.getSystemService(Activity.DISPLAY_SERVICE) as DisplayManager
+                val display = displayManager.getDisplay(displayId)
+                if (display != null && display.isValid) {
+                    if (display.state == Display.STATE_ON) {
+                        Log.e(TAG, "屏幕已亮起，触发副屏恢复")
+                        scheduleDetectAndInit()
+                    } else {
+                        Log.e(TAG, "屏幕状态: OFF")
+                        if (presentation != null) {
+                            try { presentation?.dismiss() } catch (e: Exception) {}
+                            presentation = null
+                            Log.e(TAG, "屏幕OFF，已清理Presentation")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scheduleDetectAndInit() {
+        pendingDetectRunnable?.let { handler.removeCallbacks(it) }
+        pendingDetectRunnable = Runnable {
+            if (isProcessingDisplayChange) return@Runnable
+            isProcessingDisplayChange = true
+            try {
+                if (presentation != null) {
+                    try { presentation?.dismiss() } catch (e: Exception) {}
+                    presentation = null
+                }
+                turnOnSubScreen()
+                detectAndInit()
+            } finally {
+                isProcessingDisplayChange = false
+            }
+        }
+        handler.postDelayed(pendingDetectRunnable!!, 300)
+    }
+
+    private fun onHallStateChanged(state: Int) {
+        Log.e(TAG, "皮套状态: ${if (state == 1) "合上" else "打开"}")
+        if (state == 1) {
+            // 皮套合上：关闭副屏
+            Log.e(TAG, "皮套合上，关闭副屏")
+            if (presentation != null) {
+                try { presentation?.dismiss() } catch (e: Exception) {}
+                presentation = null
+            }
+            turnOffSubScreen()
+        } else {
+            // 皮套打开：恢复副屏
+            Log.e(TAG, "皮套打开，恢复副屏")
+            scheduleDetectAndInit()
         }
     }
 
     fun register() {
         val displayManager = activity.getSystemService(Activity.DISPLAY_SERVICE) as DisplayManager
         displayManager.registerDisplayListener(displayListener, handler)
+        registerHallSensor()
+        registerUserPresentReceiver()
     }
 
     fun unregister() {
         val displayManager = activity.getSystemService(Activity.DISPLAY_SERVICE) as DisplayManager
         displayManager.unregisterDisplayListener(displayListener)
+        pendingDetectRunnable?.let { handler.removeCallbacks(it) }
+        unregisterHallSensor()
+        unregisterUserPresentReceiver()
+    }
+
+    fun onStart() {
+        Log.e(TAG, "onStart: 打开副屏")
+        turnOnSubScreen()
+        handler.postDelayed({ detectAndInit() }, 300)
+    }
+
+    fun onStop() {
+        Log.e(TAG, "onStop: 关闭副屏")
+        if (presentation != null) {
+            try { presentation?.dismiss() } catch (e: Exception) {}
+            presentation = null
+        }
+        turnOffSubScreen()
+    }
+
+    private fun registerUserPresentReceiver() {
+        if (isUserPresentRegistered) return
+        userPresentReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_USER_PRESENT) {
+                    Log.e(TAG, "收到 USER_PRESENT 广播，恢复副屏")
+                    turnOnSubScreen()
+                    handler.postDelayed({ detectAndInit() }, 300)
+                }
+            }
+        }
+        val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
+        activity.registerReceiver(userPresentReceiver, filter)
+        isUserPresentRegistered = true
+        Log.e(TAG, "USER_PRESENT 广播已注册")
+    }
+
+    private fun unregisterUserPresentReceiver() {
+        if (!isUserPresentRegistered) return
+        userPresentReceiver?.let {
+            try { activity.unregisterReceiver(it) } catch (e: Exception) {}
+        }
+        userPresentReceiver = null
+        isUserPresentRegistered = false
+        Log.e(TAG, "USER_PRESENT 广播已注销")
+    }
+
+    private fun registerHallSensor() {
+        if (isHallSensorRegistered) return
+        val sensorManager = activity.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        // 尝试多种可能的HALL传感器类型
+        val hallSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+            ?: sensorManager.getDefaultSensor(65536) // TYPE_HALL 常量值
+        if (hallSensor != null) {
+            sensorManager.registerListener(hallSensorListener, hallSensor, SensorManager.SENSOR_DELAY_NORMAL)
+            isHallSensorRegistered = true
+            Log.e(TAG, "HALL 传感器已注册: ${hallSensor.name}")
+        } else {
+            Log.e(TAG, "未找到 HALL 传感器")
+        }
+    }
+
+    private fun unregisterHallSensor() {
+        if (!isHallSensorRegistered) return
+        val sensorManager = activity.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager.unregisterListener(hallSensorListener)
+        isHallSensorRegistered = false
+        Log.e(TAG, "HALL 传感器已注销")
     }
 
     fun turnOnSubScreen() {
@@ -77,6 +230,10 @@ class SecondaryDisplayManager(
     }
 
     fun detectAndInit() {
+        if (isProcessingDisplayChange) {
+            Log.e(TAG, "正在处理屏幕变化，跳过重复检测")
+            return
+        }
         val displayManager = activity.getSystemService(Activity.DISPLAY_SERVICE) as DisplayManager
 
         val allDisplays = displayManager.displays
@@ -148,6 +305,8 @@ class SecondaryDisplayManager(
     fun release() {
         turnOffSubScreen()
         dismissPresentation()
+        unregisterHallSensor()
+        unregisterUserPresentReceiver()
         unregister()
     }
 

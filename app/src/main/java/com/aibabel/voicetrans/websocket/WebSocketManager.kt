@@ -3,16 +3,25 @@ package com.aibabel.voicetrans.websocket
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.lifecycle.lifecycleScope
 import com.aibabel.voicetrans.model.TranslationResult
 import com.aibabel.voicetrans.ui.MainActivity
 import com.aibabel.voicetrans.util.Constants
 import com.aibabel.voicetrans.util.Constants.WS_URL_CN
 import com.aibabel.voicetrans.util.Constants.WS_URL_COM
+import com.apkfuns.logutils.LogUtils
 import com.google.gson.Gson
 import commonutil.ContentProviderUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.Dispatcher
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.logging.HttpLoggingInterceptor
@@ -61,6 +70,8 @@ class WebSocketManager private constructor() {
     private var reconnectAttempts = 0
     private var reconnectRunnable: Runnable? = null
     private var callback: WebSocketCallback? = null
+    // 上次收到消息的时间戳，用于计算消息间隔
+    private var lastMessageTime = 0L
     private var mainHandler: Handler
     private var currentSessionId: String = ""       // 当前连接的 session_id
     private var lastSessionId: String = ""          // 上一次连接的 session_id（重连时复用）
@@ -74,16 +85,26 @@ class WebSocketManager private constructor() {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             Log.i(TAG, "OkHttp: $message")
         }
-        loggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        // 改为 HEADERS 避免打印完整 body（WebSocket 消息可能很长，打印耗时）
+        // BODY 级别会导致大量 Base64 数据写入 Logcat，阻塞 OkHttp 回调线程
+        loggingInterceptor.level = HttpLoggingInterceptor.Level.HEADERS
 
         client = OkHttpClient.Builder()
             .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(300, TimeUnit.SECONDS)
-            .connectTimeout(300, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)   // 连接超时：10秒（快速失败）
+            // WebSocket 心跳：每 25 秒发送 ping，防止 NAT/防火墙超时断开
+            .pingInterval(5, TimeUnit.SECONDS)
             .addInterceptor(loggingInterceptor)
             .retryOnConnectionFailure(true)
+            // 增加 OkHttp Dispatcher 线程池，避免 WebSocket 消息排队
+            .dispatcher(Dispatcher().apply {
+                maxRequests = 64  // 默认 5，增加到 64
+                maxRequestsPerHost = 64  // 默认 5，增加到 64
+            })
             .build()
     }
+
 
     fun setCallback(callback: WebSocketCallback?) {
         this.callback = callback
@@ -107,6 +128,10 @@ class WebSocketManager private constructor() {
     fun getSessionId(): String = currentSessionId
 
     fun getLastMsgId(): String = lastMsgId
+
+    fun getQueueSize(): Long {
+        return if (webSocket != null && isConnected) webSocket!!.queueSize() else 0L
+    }
 
     /**
      * 建立 WebSocket 连接
@@ -173,12 +198,18 @@ class WebSocketManager private constructor() {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.i(TAG, "<<< Received text message: $text")
+                val now = System.currentTimeMillis()
+                val interval = if (lastMessageTime > 0) now - lastMessageTime else 0
+                lastMessageTime = now
+                Log.i(TAG, "<<< [${now}] Received text message, length=${text.length}, interval=${interval}ms")
                 handleTextMessage(text)
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                Log.i(TAG, "<<< Received binary message, length: " + bytes.size)
+                val now = System.currentTimeMillis()
+                val interval = if (lastMessageTime > 0) now - lastMessageTime else 0
+                lastMessageTime = now
+                Log.i(TAG, "<<< [${now}] Received binary message, length=${bytes.size}, interval=${interval}ms")
 
                 val data = bytes.toByteArray()
                 val hexBuilder = StringBuilder()
@@ -186,7 +217,7 @@ class WebSocketManager private constructor() {
                 for (i in 0 until printLen) {
                     hexBuilder.append(String.format("%02X ", data[i]))
                 }
-                Log.i(TAG, "Binary data (first $printLen bytes): ${hexBuilder.toString()}")
+                Log.i(TAG, "<<< [${now}] Binary data (first $printLen bytes): $hexBuilder")
 
                 // 直接在OkHttp回调线程处理，避免大量二进制数据通过mainHandler.post
                 // 阻塞主线程消息队列，导致文本消息（如"translate finish"）延迟处理
@@ -239,7 +270,7 @@ class WebSocketManager private constructor() {
                         val errorMsg = when {
                             t.message?.contains("closed", ignoreCase = true) == true -> "连接已关闭"
                             t.message?.contains("timeout", ignoreCase = true) == true -> "连接超时"
-                            t.javaClass.simpleName == "EOFException" -> "服务端已断开"
+//                            t.javaClass.simpleName == "EOFException" -> "服务端已断开"
                             t.message != null -> t.message!!
                             else -> "连接异常"
                         }
@@ -269,20 +300,28 @@ class WebSocketManager private constructor() {
      * 4. 非 JSON 纯文本             → 回调 onMessage
      */
     private fun handleTextMessage(text: String) {
+
         try {
             val result = gson.fromJson(text, TranslationResult::class.java)
+            val now = result.timestamp
+            val timeStr = String.format("%02d:%02d:%02d:%03d",
+                (now / 3600000).toInt() % 24,
+                (now / 60000).toInt() % 60,
+                (now / 1000).toInt() % 60,
+                (now % 1000).toInt()
+            )
             if (result != null && result.type != null) {
-                Log.e(TAG, "Received text message: $result")
-                Log.e(TAG,"ISTRUE:${(result.type == "text" && result.classType == "binary")}")
+                Log.e(TAG, "[$timeStr] Received text message: $result")
+                Log.e(TAG,"[$timeStr] ISTRUE:${(result.type == "text" && result.classType == "binary")}")
 
                 if (result.msgId != null) {
                     lastMsgId = result.msgId!!
-                    Log.i(TAG, "Updated lastMsgId: $lastMsgId")
+                    Log.i(TAG, "[$timeStr] Updated lastMsgId: $lastMsgId")
                 }
 
                 if (result.classType == "binary") {
                     val base64Text = result.text
-                    Log.e(TAG, "Received Base64 audio: $base64Text")
+                    Log.e(TAG, "[$timeStr] Received Base64 audio: $base64Text")
                     if (!base64Text.isNullOrEmpty()) {
                         try {
                             val decodedBytes = android.util.Base64.decode(base64Text, android.util.Base64.DEFAULT)
@@ -291,10 +330,10 @@ class WebSocketManager private constructor() {
                             for (i in 0 until printLen) {
                                 hexBuilder.append(String.format("%02X ", decodedBytes[i]))
                             }
-                            Log.i(TAG, "Decoded Base64 audio, length: ${decodedBytes.size}, first $printLen bytes: ${hexBuilder.toString()}")
+                            Log.i(TAG, "[$timeStr] Received Base64 audio： ${decodedBytes.size}, first $printLen")
                             callback?.onBinaryData(decodedBytes)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to decode Base64 audio: ${e.message}")
+                            Log.e(TAG, "[$timeStr] Failed to decode Base64 audio: ${e.message}")
                         }
                     }
                     return
@@ -304,20 +343,18 @@ class WebSocketManager private constructor() {
                     isPendingFinish = false
                     lastMsgId = ""
                     mainHandler.post {
-                        Log.i(TAG, "Received finish message via text frame")
+                        Log.i(TAG, "[$timeStr] Received finish message via text frame")
                         callback?.onMessage(Constants.RESP_TRANSLATE_FINISH)
                     }
                     return
                 }
 
-                mainHandler.post {
-                    Log.e(TAG, "Parsed result: $result")
-                    callback?.onResult(result)
-                }
+                Log.e(TAG, "[$timeStr] Parsed result: $result")
+                callback?.onResult(result)
                 return
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Not a JSON result, treating as text message")
+            Log.e(TAG, " Not a JSON result, treating as text message")
         }
 
         mainHandler.post {
@@ -326,12 +363,13 @@ class WebSocketManager private constructor() {
     }
 
     fun sendAudioData(data: ByteArray): Boolean {
+
         if (webSocket == null) {
-            Log.e(TAG, "WebSocket is null, cannot send audio")
+            Log.e(TAG, " WebSocket is null, cannot send audio")
             return false
         }
         if (!isConnected) {
-            Log.e(TAG, "WebSocket not connected (isConnected=false), cannot send audio. Queue size=" + (webSocket!!.queueSize()))
+            Log.e(TAG, " WebSocket not connected (isConnected=false), cannot send audio. Queue size=" + (webSocket!!.queueSize()))
             return false
         }
         val hexBuilder = StringBuilder()
@@ -339,17 +377,18 @@ class WebSocketManager private constructor() {
         for (i in 0 until printLen) {
             hexBuilder.append(String.format("%02X ", data[i]))
         }
-//        Log.i(TAG2, ">>> Sending audio data: (first $printLen bytes): ${hexBuilder.toString()}")
+        Log.i(TAG2, ">>> Sending audio data, size=${data.size}, first $printLen bytes: ${hexBuilder.toString()}")
         val sent = webSocket!!.send(ByteString.of(*data))
         if (sent) {
-            Log.i(TAG2, "Audio data sent successfully, size=${data.size}, queue size=" + webSocket!!.queueSize())
+            Log.i(TAG2, ">>> Audio data sent successfully, queue size=" + webSocket!!.queueSize())
         } else {
-            Log.e(TAG2, "Failed to send audio data, queue size=" + webSocket!!.queueSize())
+            Log.e(TAG2, ">>> Failed to send audio data, queue size=" + webSocket!!.queueSize())
         }
         return sent
     }
 
     fun sendCommand(command: String) {
+
         if (webSocket == null) {
             Log.e(TAG, "WebSocket is null, cannot send command")
             return
@@ -362,9 +401,9 @@ class WebSocketManager private constructor() {
         Log.i(TAG, ">>> Sending command: $command")
         val sent = webSocket!!.send(command)
         if (sent) {
-            Log.i(TAG, "Command sent successfully: $command")
+            Log.i(TAG, ">>> Command sent successfully: $command, queue size=" + webSocket!!.queueSize())
         } else {
-            Log.e(TAG, "Failed to send command: $command, queue size=" + webSocket!!.queueSize())
+            Log.e(TAG, ">>> Failed to send command: $command, queue size=" + webSocket!!.queueSize())
         }
     }
 

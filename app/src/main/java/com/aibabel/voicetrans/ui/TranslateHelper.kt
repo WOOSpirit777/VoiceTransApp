@@ -742,7 +742,7 @@ class TranslateHelper(
         webSocketManager.setLanguage(currentLang, targetLang)
     }
 
-    private fun updateSecondScreen() {
+    fun updateSecondScreen() {
         if (currentMessage == null) return
         val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
         secondaryDisplayManager.updateContent(

@@ -76,7 +76,7 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
     override fun onResume() {
         super.onResume()
         translateHelper.updateMainDisplayLanguage()
-        displayManager.detectAndInit()
+        // onStart() 已经处理了副屏检测，这里不再重复
         registerReceiver(modeChangeReceiver, IntentFilter(SettingsActivity.ACTION_SECONDARY_MODE_CHANGED))
         registerReceiver(sessionModeReceiver, IntentFilter(SettingsActivity.ACTION_SESSION_MODE_CHANGED))
         updateSessionMode()
@@ -186,7 +186,6 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         updateLanguageButtons(Constants.LANG_ZH)
 
         displayManager = SecondaryDisplayManager(this, mainHandler)
-        displayManager.turnOnSubScreen()
         displayManager.register()
         val mode = prefs.getInt(SettingsActivity.KEY_SECONDARY_SCREEN_MODE, SettingsActivity.MODE_INDONESIAN)
         displayManager.setMode(mode)
@@ -214,6 +213,11 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
         translateHelper.init()
         translateHelper.updateMainDisplayLanguage()
 
+        // 副屏恢复后刷新翻译内容
+        displayManager.setOnDisplayReadyCallback {
+            translateHelper.updateSecondScreen()
+        }
+
         modeChangeReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == SettingsActivity.ACTION_SECONDARY_MODE_CHANGED) {
@@ -237,8 +241,6 @@ class MainActivity : BaseVBRefreshActivityOpt<MainViewModel, ActivityMainBinding
 
         updateSessionMode()
         updateS2sButtonText()
-
-        mainHandler.postDelayed({ displayManager.detectAndInit() }, 500)
     }
 
     override fun initData() {

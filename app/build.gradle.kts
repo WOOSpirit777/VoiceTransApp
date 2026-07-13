@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.aibabel.voicetrans"
         minSdk = 24
-        targetSdk = 28
+        targetSdk = 35
         versionCode = 1
         versionName = "v1.0.0"
     }

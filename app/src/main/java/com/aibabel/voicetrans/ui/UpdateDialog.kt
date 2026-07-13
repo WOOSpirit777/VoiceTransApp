@@ -1,12 +1,15 @@
 package com.aibabel.voicetrans.ui
 
 import android.app.Dialog
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -14,12 +17,11 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.core.content.FileProvider
 import com.aibabel.voicetrans.R
-import com.aibabel.voicetrans.util.Constants
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 
 class UpdateDialog(context: Context) : Dialog(context, R.style.UpdateDialogStyle) {
@@ -152,17 +154,122 @@ class UpdateDialog(context: Context) : Dialog(context, R.style.UpdateDialogStyle
     }
 
     private fun installApk(apkFile: File) {
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        tvProgress.text = "正在安装..."
 
-        val apkUri = FileProvider.getUriForFile(
-            context,
-            context.packageName + ".fileprovider",
-            apkFile
-        )
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+        // 注册广播接收器接收安装结果
+        val action = "com.aibabel.voicetrans.INSTALL_STATUS"
+        val installResultReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                val status = intent?.getIntExtra(PackageInstaller.EXTRA_STATUS, -999) ?: -999
+                val msg = intent?.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
+                context.unregisterReceiver(this)
 
-        context.startActivity(intent)
+                mainHandler.post {
+                    when (status) {
+                        PackageInstaller.STATUS_SUCCESS -> {
+                            tvProgress.text = "安装成功，正在重启..."
+                            // 延迟1秒后自动重启应用，给系统处理安装的时间
+                            mainHandler.postDelayed({
+                                dismiss()
+                                launchApp()
+                            }, 1000)
+                        }
+                        PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                            // 系统需要用户确认，拉起安装确认界面
+                            val confirmIntent = intent?.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                            confirmIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            confirmIntent?.let { context.startActivity(it) }
+                            dismiss()
+                        }
+                        else -> {
+                            tvProgress.text = "安装失败: $msg"
+                            btnUpdate.isEnabled = true
+                            btnCancel.isEnabled = true
+                            btnUpdate.text = context.getString(R.string.update)
+                            Log.e("UpdateDialog", "安装失败 status=$status msg=$msg")
+                        }
+                    }
+                }
+            }
+        }
+        context.registerReceiver(installResultReceiver, IntentFilter(action))
+
+        // 使用PackageInstaller API安装，避免FileProvider和pm命令的兼容性问题
+        Thread {
+            try {
+                val packageInstaller = context.packageManager.packageInstaller
+                val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                params.setAppPackageName(context.packageName)
+
+                val sessionId = packageInstaller.createSession(params)
+                val session = packageInstaller.openSession(sessionId)
+
+                // 将APK写入session
+                FileInputStream(apkFile).use { input ->
+                    session.openWrite("app.apk", 0, apkFile.length()).use { output ->
+                        val buffer = ByteArray(8192)
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            output.write(buffer, 0, read)
+                        }
+                        session.fsync(output)
+                    }
+                }
+
+                // 提交安装，通过PendingIntent接收结果
+                val intent = Intent(action)
+                intent.putExtra(PackageInstaller.EXTRA_PACKAGE_NAME, context.packageName)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context, sessionId, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                )
+                session.commit(pendingIntent.intentSender)
+                session.close()
+
+                // 备选方案：延迟3秒后使用am start命令启动应用
+                // 因为动态Receiver可能在旧进程被杀掉后无法收到回调
+                Thread {
+                    try {
+                        Thread.sleep(3000)
+                        Log.d("UpdateDialog", "尝试使用am start启动应用")
+                        val process = Runtime.getRuntime().exec(
+                            arrayOf("am", "start", "-n", "${context.packageName}/.ui.MainActivity")
+                        )
+                        val exitCode = process.waitFor()
+                        Log.d("UpdateDialog", "am start exitCode=$exitCode")
+                    } catch (e: Exception) {
+                        Log.e("UpdateDialog", "am start失败: ${e.message}")
+                    }
+                }.start()
+            } catch (e: Exception) {
+                try { context.unregisterReceiver(installResultReceiver) } catch (_: Exception) {}
+                mainHandler.post {
+                    tvProgress.text = "安装失败：${e.message}"
+                    btnUpdate.isEnabled = true
+                    btnCancel.isEnabled = true
+                    btnUpdate.text = context.getString(R.string.update)
+                    Log.e("UpdateDialog", "安装异常", e)
+                }
+            }
+        }.start()
+    }
+
+    private fun launchApp() {
+        try {
+            // 使用ApplicationContext而不是Activity Context，因为Activity可能在安装过程中被销毁
+            val appContext = context.applicationContext
+            val intent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                intent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                appContext.startActivity(intent)
+                Log.d("UpdateDialog", "launchApp成功")
+            } else {
+                Log.e("UpdateDialog", "无法获取启动Intent")
+            }
+        } catch (e: Exception) {
+            Log.e("UpdateDialog", "启动应用失败: ${e.message}", e)
+        }
     }
 }

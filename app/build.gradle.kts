@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aibabel.voicetrans"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "v1.0.0"
@@ -84,6 +84,20 @@ dependencies {
     implementation("androidx.room:room-ktx:$dbVersion")
     implementation("com.google.zxing:core:3.5.2")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    // ===== 离线翻译 SDK（本地 AAR，独立分发）=====
+    // 注意：settings.gradle.kts 是 FAIL_ON_PROJECT_REPOS，不能在这里加 repositories{}
+    // 或 flatDir，因此用 files() 直接引用 AAR 文件。
+    implementation(files("libs/asr_onnx_sdk-release-v1.6.0.aar"))
+
+    // AAR 不传递依赖的 POM，以下为 SDK 运行期必需，必须由宿主补齐。
+    // 缺任何一个都会在初始化阶段出现 NoClassDefFoundError。
+    implementation("com.squareup.okio:okio:3.6.0")
+    // okdownload：SDK 的断点续传下载器（RemoteDownloadInstaller）依赖。
+    // 只需核心包：SDK 只用到 DownloadTask / DownloadListener3 / ResumeFailedCause；
+    // sqlite（断点存储）与 okhttp（自定义网络栈）两个插件并未发布到 Maven Central，
+    // 且本 SDK 不依赖它们，故不引入。
+    implementation("com.liulishuo.okdownload:okdownload:1.0.7")
 }
 
 

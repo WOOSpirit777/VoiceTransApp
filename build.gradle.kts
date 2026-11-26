@@ -5,9 +5,11 @@ plugins {
 }
 
 // baseLib 模块通过 rootProject.ext.lib / rootProject.ext.packageName 访问
+// 注：minSdk 提到 26 —— 离线翻译 SDK（ONNX Runtime + sherpa-onnx）要求 26+。
+// 实际交付设备 PDS01 为 API 27，不受影响。
 extra["lib"] = mapOf(
     "compileSdkVersion" to 35,
-    "minSdkVersion" to 24,
+    "minSdkVersion" to 26,
     "targetSdkVersion" to 35
 )
 extra["packageName"] = mapOf(

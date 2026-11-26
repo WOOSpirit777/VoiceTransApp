@@ -26,14 +26,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:name="com.quniu.baselib.BaseApplication"
+        android:name=".VoiceTransApplication"
         android:theme="@style/Theme.VoiceTransApp"
         android:usesCleartextTraffic="true">
 
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait">
+            >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -43,7 +43,15 @@
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+             />
+        <!-- exported=true 只为让 adb 能直接拉起测试通道（test_wav extra）；
+             该页面本身不对外提供任何数据，正式交付可改回 false。
+             不锁定方向：PDS01 是 720x1560 竖屏设备，强制 landscape 会让
+             Surface 尺寸与屏幕不匹配，横屏布局本身用 ConstraintLayout 自适应。 -->
+        <activity
+            android:name=".ui.OfflineTransActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name="com.aibabel.voicetrans.ui.BroadcastUrlActivity" />
 
         <provider

@@ -3,7 +3,7 @@ ext {
     voice = [
             compileSdkVersion    : 34,
             buildToolsVersion    : '35.0.0',
-            minSdkVersion        : 25,
+            minSdkVersion        : 26,
             targetSdkVersion     : 28,
             versionCode          : 20260417,
             versionName          : "v1.2.6",
@@ -13,7 +13,7 @@ ext {
     lib = [
             compileSdkVersion: 34,
             buildToolsVersion: '35.0.0',
-            minSdkVersion    : 25,
+            minSdkVersion    : 26,
             targetSdkVersion : 35,
             versionCode      : 1,
             versionName      : "v1.2.5"

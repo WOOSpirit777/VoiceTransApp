@@ -36,10 +36,45 @@
     <string name="clearing">清空...</string>
     <string name="chinese">中文</string>
     <string name="indonesian">印尼</string>
+    <string name="english">English</string>
     <string name="clear">清空</string>
+    <string name="translation_pair">翻译语言对</string>
+    <string name="pair_zh_id">中文 ↔ 印尼</string>
+    <string name="pair_zh_en">中文 ↔ 英文</string>
+    <string name="secondary_screen_mode_english">显示英文</string>
+    <string name="waiting_for_english">等待翻译结果...</string>
     <string name="session_mode">会话模式</string>
     <string name="session_mode_s2s">交流模式</string>
     <string name="session_mode_s2t">同声传译</string>
     <string name="waiting_for_chinese">等待翻译结果...</string>
     <string name="waiting_for_indonesian">等待翻译结果...</string>
+
+    <!-- ===== 离线翻译 ===== -->
+    <string name="offline_translation">离线翻译</string>
+    <string name="offline_desc">无需网络，本机识别与翻译（中文 ↔ 印尼语）</string>
+    <string name="offline_enter">进入离线翻译</string>
+    <string name="offline_retry">重试</string>
+    <string name="offline_status_idle">未加载</string>
+    <string name="offline_status_loading">正在加载模型…</string>
+    <string name="offline_status_ready">已就绪</string>
+    <string name="offline_status_failed">加载失败</string>
+    <string name="offline_status_asr_only">已就绪（仅识别，翻译不可用）</string>
+    <string name="offline_model_source">模型来源</string>
+    <string name="offline_source_download">服务端下载</string>
+    <string name="offline_source_builtin">APK 内置</string>
+    <string name="offline_switch_source">切换</string>
+    <string name="offline_toggle_on">已开启离线翻译，正在准备模型</string>
+    <string name="offline_toggle_off">已关闭离线翻译，内存已释放</string>
+    <string name="offline_source_changed">已切换模型来源，正在重新加载</string>
+
+    <!-- 离线翻译界面 -->
+    <string name="offline_title">离线翻译</string>
+    <string name="offline_badge">离线</string>
+    <string name="offline_hold_to_talk">长按说话</string>
+    <string name="offline_release_to_send">松开结束</string>
+    <string name="offline_listening">正在聆听…</string>
+    <string name="offline_waiting_model">模型准备中…</string>
+    <string name="offline_empty_hint">按住下方按钮开始说话</string>
+    <string name="offline_clear">清空</string>
+    <string name="offline_key_hint">按键 134 说中文 · 按键 135 说印尼语</string>
 </resources>

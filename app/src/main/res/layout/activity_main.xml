@@ -12,12 +12,16 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".ui.MainActivity">
-        <ImageView
+        <!-- 顶部柔光背景。
+         原先用 bg_toop.png（1984x1444），在 320dpi 设备上按 2x 解码后
+         约 45MB，GPU 上传时触发 "Canvas: trying to draw too large(214962488bytes) bitmap"
+         直接崩溃（横竖屏都会复现）。改用 shape 径向渐变，视觉接近零风险。 -->
+        <View
             android:layout_width="443dp"
-            android:layout_height="325dp"
+            android:layout_height="200dp"
+            android:background="@drawable/bg_offline_glow"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            android:src="@drawable/bg_toop"/>
+            app:layout_constraintStart_toStartOf="parent"/>
     <!-- ========== 顶部标题栏 ========== -->
     <LinearLayout
         android:id="@+id/titleBar"
@@ -36,15 +40,24 @@
             android:contentDescription="@string/back"
             android:src="@drawable/ic_back" />
 
-        <TextView
-            android:layout_width="0dp"
+       <!-- <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:gravity="start"
             android:text="@string/app_name"
             android:textColor="@color/text_secondary"
             android:textSize="18sp"
-            android:textStyle="bold" />
+            android:textStyle="bold" />-->
+
+        <Spinner
+            android:id="@+id/spinnerTranslationPair"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:background="@android:color/transparent"
+            android:popupBackground="@color/bg_primary"
+            android:dropDownWidth="wrap_content" />
 
         <ImageButton
             android:id="@+id/btnQrCode"

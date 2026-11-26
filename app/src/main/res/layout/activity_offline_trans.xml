@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  离线翻译界面。
+
+  视觉与主界面（activity_main.xml）保持同一套语言：
+  - 深蓝紫底 bg_primary + 顶部柔光（shape 渐变，不用大图以免横屏解码溢出）
+  - 两个 120dp 圆形按钮，分别用青绿/珊瑚红（bg_circle_button_secondary / _main）
+  - 结果区 24sp 正文 + 米金标签，底部提示 13sp hint
+  区别只是「更专注」：去掉语言对 Spinner 与扫码入口，只留返回、清空与两个大按钮。
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    tools:context=".ui.OfflineTransActivity">
+
+    <!-- 顶部柔光背景。
+         不用 bg_toop.png（1984x1444 大图，320dpi 设备上按 2x 解码后约 45MB，
+         横屏放大直接触发 "Canvas: trying to draw too large bitmap" 崩溃）。
+         这里用同色系的低饱和纯色块 + 圆角，视觉效果接近原图但零解码开销。 -->
+    <View
+        android:layout_width="443dp"
+        android:layout_height="200dp"
+        android:background="@drawable/bg_offline_glow"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- ========== 标题栏 ========== -->
+    <LinearLayout
+        android:id="@+id/titleBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="30dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:src="@drawable/ic_back"
+            app:tint="@color/text_secondary" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/offline_title"
+            android:textColor="@color/text_secondary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- 离线标识：明确告诉用户当前不走网络 -->
+        <TextView
+            android:id="@+id/tvOfflineBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@color/lang_default"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="3dp"
+            android:text="@string/offline_badge"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnClear"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@color/lang_selected"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:text="@string/offline_clear"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- ========== 状态提示（加载中 / 失败） ========== -->
+    <TextView
+        android:id="@+id/tvState"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text=""
+        android:textColor="@color/text_hint"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/titleBar" />
+
+    <!-- ========== 结果区 ========== -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/svResult"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:fillViewport="true"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@id/resultBarrier"
+        app:layout_constraintTop_toBottomOf="@id/tvState">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
+
+            <!-- 空态提示 -->
+            <TextView
+                android:id="@+id/tvEmptyHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/offline_empty_hint"
+                android:textColor="@color/text_hint"
+                android:textSize="15sp" />
+
+            <!-- 识别+翻译结果列表（纯文本，靠换行分段；与主界面同一呈现方式） -->
+            <TextView
+                android:id="@+id/tvResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingExtra="10dp"
+                android:textColor="@color/text_primary"
+                android:textSize="24sp"
+                android:visibility="gone" />
+
+            <!-- 实时过程文本 -->
+            <TextView
+                android:id="@+id/tvPartial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="6dp"
+                android:textColor="@color/accent_gold"
+                android:textSize="18sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- ========== 底部：两个圆形大按钮 ========== -->
+    <LinearLayout
+        android:id="@+id/bottomContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="32dp"
+        android:paddingVertical="4dp"
+        app:layout_constraintBottom_toTopOf="@id/tvRecordHint">
+
+        <!-- 左：中文（青绿，与主界面 btnMainScreen 同色） -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/btnChinese"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:background="@drawable/bg_circle_button_secondary"
+            android:backgroundTint="@null"
+            android:text="@string/chinese"
+            android:textColor="@color/text_secondary"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+
+        <!-- 右：印尼语（珊瑚红，与主界面 btnSecondaryScreen 同色） -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/btnIndonesian"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginStart="48dp"
+            android:background="@drawable/bg_circle_button_main"
+            android:backgroundTint="@null"
+            android:text="@string/indonesian"
+            android:textColor="@color/text_secondary"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 操作提示（说话中/待机） -->
+    <TextView
+        android:id="@+id/tvRecordHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/offline_hold_to_talk"
+        android:textColor="@color/text_hint"
+        android:textSize="13sp"
+        app:layout_constraintBottom_toTopOf="@id/tvKeyHint"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 物理按键说明 -->
+    <TextView
+        android:id="@+id/tvKeyHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:text="@string/offline_key_hint"
+        android:textColor="@color/text_hint"
+        android:textSize="11sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/resultBarrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="top"
+        app:constraint_referenced_ids="bottomContainer" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

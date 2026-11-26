@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  离线界面的顶部柔光背景。
+  用 shape 渐变代替 bg_toop.png：原图 1984x1444 在 320dpi 设备上解码约 45MB，
+  横屏放大后会触发 "Canvas: trying to draw too large bitmap" 崩溃。
+  这里的径向渐变在视觉上接近原图的「左上柔光」，但没有任何位图解码开销。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:centerX="0.25"
+        android:centerY="0.15"
+        android:endColor="#001A1A2E"
+        android:gradientRadius="560dp"
+        android:startColor="#FF0F3460"
+        android:type="radial" />
+</shape>

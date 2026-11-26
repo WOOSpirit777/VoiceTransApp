@@ -32,6 +32,19 @@ import com.aibabel.voicetrans.offline.OfflineTranslationManager
  * 这里按按钮只是「选哪个引擎说话」，不涉及任何模型加载或重建，
  * 因此左说一句、右说一句可以连续交替，没有等待。
  *
+ * ## 副屏（HDMI 外接）
+ * 与在线链路复用同一套 [SecondaryDisplayManager] / [SecondaryPresentation]：
+ * - 副屏显示哪种语言由设置页「副屏显示设置」决定，主屏显示与之相反的内容；
+ * - 每次识别/翻译结果都同步推到副屏，让**对面的人**能直接看副屏读译文；
+ * - 副屏的亮灭、皮套（HALL）、息屏恢复、每 1.5s 保活全部复用在线那套逻辑。
+ *
+ * 之所以能零改动复用，是因为 [SecondaryDisplayManager.updateContent] 的判定是
+ * 「副屏语言 == 源语言 → 显示原文；== 目标语言 → 显示译文」，而离线双向对话
+ * 每句话天然带 sourceLang/targetLang：
+ * - 按中文按钮：source=zh / target=id → 副屏配印尼语则显示印尼译文
+ * - 按印尼按钮：source=id / target=zh → 副屏配中文则显示中文译文
+ * 正好都是「给对面那个人的语言」。
+ *
  * ## 与主界面的关系
  * 视觉沿用主界面同一套配色与圆形按钮（`bg_circle_button_*`），但入口独立：
  * 主界面仍然是在线 WebSocket 链路，互不干扰。
@@ -39,6 +52,11 @@ import com.aibabel.voicetrans.offline.OfflineTranslationManager
 class OfflineTransActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityOfflineTransBinding
+
+    /** 副屏管理器：与在线链路同一个类，负责检测/电源/皮套/Presentation 生命周期。 */
+    private lateinit var displayManager: SecondaryDisplayManager
+
+    private lateinit var prefs: android.content.SharedPreferences
 
     /** 已确认的结果行（按「识别 → 译文」成对追加）。 */
     private val resultLines = ArrayList<String>()
@@ -64,11 +82,25 @@ class OfflineTransActivity : AppCompatActivity() {
         setContentView(binding.root)
         super.onCreate(savedInstanceState)
 
+        prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         checkAudioPermission()
         bindViews()
+        initSecondaryDisplay()
         renderState(OfflineTranslationManager.current())
         handleTestIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 打开副屏 + 显示 Presentation（内部有 500ms 延时与失败重试）
+        displayManager.onStart()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // 关闭副屏电源，避免离开页面后仍占着 HDMI 显示
+        displayManager.onStop()
     }
 
     /**
@@ -116,6 +148,10 @@ class OfflineTransActivity : AppCompatActivity() {
         super.onResume()
         OfflineTranslationManager.observe(stateObserver)
         OfflineTranslationManager.addSessionListener(sessionListener)
+        registerReceiver(
+            modeChangeReceiver,
+            android.content.IntentFilter(SettingsActivity.ACTION_SECONDARY_MODE_CHANGED),
+        )
         BilingualTranslateSdk.setLogcatEnabled(true)
         isResumed = true
         // 页面重建时从 manager 的历史恢复已出结果，避免显示空白
@@ -129,6 +165,7 @@ class OfflineTransActivity : AppCompatActivity() {
         super.onPause()
         OfflineTranslationManager.removeObserver(stateObserver)
         OfflineTranslationManager.removeSessionListener(sessionListener)
+        unregisterReceiver(modeChangeReceiver)
         isResumed = false
         Log.i(TAG, "onPause listener removed")
         // 离开页面时若还在录音，主动收尾，避免占着麦克风
@@ -143,10 +180,54 @@ class OfflineTransActivity : AppCompatActivity() {
         OfflineTranslationManager.removeObserver(stateObserver)
         OfflineTranslationManager.removeSessionListener(sessionListener)
         mainHandler.removeCallbacksAndMessages(null)
+        // 释放副屏：关闭副屏电源、注销显示器/HALL/广播监听
+        runCatching { displayManager.release() }
         super.onDestroy()
     }
 
+    /**
+     * 副屏语言切换（设置页改「副屏显示设置」时发出）。
+     *
+     * 与在线链路一致：换模式后要重建 Presentation 内容并刷新当前这句，
+     * 否则副屏会一直停在旧语言。
+     */
+    private val modeChangeReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action != SettingsActivity.ACTION_SECONDARY_MODE_CHANGED) return
+            secondaryMode = intent.getIntExtra(
+                SettingsActivity.EXTRA_MODE,
+                SettingsActivity.MODE_INDONESIAN,
+            )
+            Log.i(TAG, "secondary mode changed -> $secondaryMode")
+            displayManager.setMode(secondaryMode)
+            displayManager.showPresentation(secondaryMode)
+            refreshSecondaryDisplay()
+        }
+    }
+
     // ---------------- 视图绑定 ----------------
+
+    /**
+     * 初始化副屏，逻辑与 [MainActivity] 完全一致：
+     * 注册显示器监听（拔插 HDMI）、HALL 传感器（皮套开合）、USER_PRESENT 广播（解锁恢复）。
+     *
+     * 副屏语言取自设置页的 `KEY_SECONDARY_SCREEN_MODE`，与在线链路共用同一份配置——
+     * 用户在设置里选了「副屏显示印尼语」，在线和离线看到的副屏行为一致。
+     */
+    private fun initSecondaryDisplay() {
+        displayManager = SecondaryDisplayManager(this, mainHandler)
+        displayManager.register()
+        secondaryMode = prefs.getInt(
+            SettingsActivity.KEY_SECONDARY_SCREEN_MODE,
+            SettingsActivity.MODE_INDONESIAN,
+        )
+        displayManager.setMode(secondaryMode)
+        // 副屏从息屏/拔插恢复后，把当前已有结果重新刷上去（否则副屏会停在"等待翻译"）
+        displayManager.setOnDisplayReadyCallback {
+            refreshSecondaryDisplay()
+        }
+        Log.i(TAG, "secondary display init mode=$secondaryMode")
+    }
 
     private fun bindViews() {
         binding.btnBack.setOnClickListener { finish() }
@@ -156,6 +237,8 @@ class OfflineTransActivity : AppCompatActivity() {
             binding.tvPartial.text = ""
             binding.tvPartial.visibility = View.GONE
             renderResults()
+            // 副屏同步清空，否则会残留上一句
+            displayManager.clearContent(secondaryMode)
         }
 
         // 屏幕按钮：长按开始、松开结束（与主界面同一套手势）
@@ -270,6 +353,58 @@ class OfflineTransActivity : AppCompatActivity() {
         mainHandler.postDelayed({ coolDown = false }, 800L)
     }
 
+    // ---------------- 副屏内容同步 ----------------
+
+    /**
+     * 副屏当前语言模式（0=印尼 1=中文 2=英文）。
+     *
+     * 不用每次从 prefs 读：广播里带来的 mode 才是"用户刚选的"，
+     * 而 prefs 可能还没落盘（设置页是 apply() 异步写）。
+     * 启动时从 prefs 初始化，之后以广播为准。
+     */
+    private var secondaryMode: Int = SettingsActivity.MODE_INDONESIAN
+
+    /**
+     * 把「当前这句话」推到副屏，让对面的人能直接看。
+     *
+     * 判定交给 [SecondaryDisplayManager.updateContent]：它按
+     * 「副屏语言 == sourceLang → 原文；== targetLang → 译文」自己选。
+     * 双向对话天然满足这个模型，因此不需要在离线侧写任何语言判断。
+     *
+     * @param asrText 识别原文
+     * @param mtText 译文；null 时副屏若配的是目标语言会显示"等待翻译"
+     * @param direction 这句话的方向，决定 sourceLang/targetLang
+     */
+    private fun pushToSecondary(asrText: String, mtText: String?, direction: BilingualTranslateSdk.Direction) {
+        displayManager.updateContent(
+            asrText,
+            mtText,
+            direction.sourceLanguage,
+            direction.targetLanguage,
+            secondaryMode,
+        )
+        Log.i(
+            TAG,
+            "secondary push mode=$secondaryMode ${direction.sourceLanguage}->${direction.targetLanguage} " +
+                "asr=\"${asrText.take(20)}\" mt=\"${mtText?.take(20) ?: "-"}\"",
+        )
+    }
+
+    /**
+     * 用最新一条结果刷新副屏（副屏恢复/重建后调用）。
+     *
+     * 只推最后一条：副屏是 240x320 的小屏，一次只放得下一句话，
+     * 把整段历史铺上去反而看不清。
+     */
+    private fun refreshSecondaryDisplay() {
+        val last = OfflineTranslationManager.lastResult()
+        if (last == null) {
+            displayManager.clearContent(secondaryMode)
+            return
+        }
+        pushToSecondary(last.asrText, last.mtText, last.direction)
+    }
+
     // ---------------- 状态与结果渲染 ----------------
 
     private val stateObserver = OfflineTranslationManager.Observer { snapshot ->
@@ -330,12 +465,18 @@ class OfflineTransActivity : AppCompatActivity() {
             binding.svResult.post { binding.svResult.fullScroll(View.FOCUS_DOWN) }
         }
 
-        override fun onSegment(asrText: String, mtText: String?) {
+        override fun onSegment(
+            asrText: String,
+            mtText: String?,
+            direction: BilingualTranslateSdk.Direction,
+        ) {
             Log.i(TAG, "onSegment asr=\"$asrText\" mt=${mtText?.let { "\"$it\"" } ?: "null"}")
             // 一段结束后清掉过程文本，避免与已确认结果重复显示
             binding.tvPartial.text = ""
             binding.tvPartial.visibility = View.GONE
-            appendResult(asrText, mtText)
+            syncResultsFromHistory()
+            // 同步到副屏：让对面的人直接看译文（副屏语言由设置决定，内部自动选原文/译文）
+            pushToSecondary(asrText, mtText, direction)
         }
 
         override fun onFinished(fullText: String, elapsedMs: Long) {
@@ -367,8 +508,8 @@ class OfflineTransActivity : AppCompatActivity() {
         binding.svResult.post { binding.svResult.fullScroll(View.FOCUS_DOWN) }
     }
 
-    /** 把 manager 的历史同步到本地并刷新。译文为空时只显示原文，避免出现空的箭头行。 */
-    private fun appendResult(asrText: String, mtText: String?) {
+    /** 把 manager 的结果历史同步到本地并刷新列表。 */
+    private fun syncResultsFromHistory() {
         resultLines.clear()
         resultLines.addAll(OfflineTranslationManager.resultHistory())
         renderResults()

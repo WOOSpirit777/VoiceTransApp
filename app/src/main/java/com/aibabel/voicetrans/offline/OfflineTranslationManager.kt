@@ -79,8 +79,14 @@ object OfflineTranslationManager {
         /** 过程文本（含未确认半句）。 */
         fun onPartial(text: String)
 
-        /** 一段识别 + 翻译结果；mtText 为 null 表示翻译不可用。 */
-        fun onSegment(asrText: String, mtText: String?)
+        /**
+         * 一段识别 + 翻译结果。
+         *
+         * @param asrText 识别原文
+         * @param mtText 译文；翻译不可用或失败时为 null
+         * @param direction 这句话的方向（副屏据此决定显示原文还是译文）
+         */
+        fun onSegment(asrText: String, mtText: String?, direction: BilingualTranslateSdk.Direction)
 
         /** 本次会话结束。 */
         fun onFinished(fullText: String, elapsedMs: Long)
@@ -94,15 +100,42 @@ object OfflineTranslationManager {
     private val sessionListeners = CopyOnWriteArrayList<SessionListener>()
 
     /**
-     * 已完成的「原文 → 译文」结果历史。
+     * 一条已完成的结果。
      *
-     * 放在 manager 而不是 Activity 里：页面重建（旋转/被系统回收/am start 重复拉起）
-     * 后新实例能立即恢复已有内容，不会因为回调打给了旧实例而显示空白。
+     * 保留结构化字段（而不只拼成字符串）是因为副屏需要单独拿 asrText / mtText /
+     * direction：副屏按「自身语言 == 源语言 → 原文；== 目标语言 → 译文」取内容，
+     * 拼成 "原文\n→ 译文" 的整串在 240x320 的小屏上既放不下也没法分流。
+     *
+     * @param asrText 识别原文
+     * @param mtText 译文；翻译不可用或失败时为 null
+     * @param direction 这句话的方向
      */
-    private val history = CopyOnWriteArrayList<String>()
+    data class ResultLine(
+        val asrText: String,
+        val mtText: String?,
+        val direction: BilingualTranslateSdk.Direction,
+    ) {
+        /** 主界面列表里的显示形态：有译文时第二行带箭头。 */
+        fun display(): String = if (mtText.isNullOrBlank()) asrText else "$asrText\n→ $mtText"
+    }
 
-    /** 当前累积的结果文本（每段一段，用空行分隔）。 */
-    fun resultHistory(): List<String> = history.toList()
+    /**
+     * 已完成的结果历史。
+     *
+     * 放在 manager 而不是 Activity 里：页面重建（被系统回收/am start 重复拉起）
+     * 后新实例能立即恢复已有内容，不会因为回调打给了旧实例而显示空白；
+     * 副屏恢复时也能从这里取最后一条重刷。
+     */
+    private val history = CopyOnWriteArrayList<ResultLine>()
+
+    /** 当前累积的结果（结构化）。 */
+    fun results(): List<ResultLine> = history.toList()
+
+    /** 当前累积的结果文本（每段一段，用空行分隔）。界面直接遍历用这个。 */
+    fun resultHistory(): List<String> = history.map { it.display() }
+
+    /** 最后一条结果；没有时返回 null。副屏恢复重刷用。 */
+    fun lastResult(): ResultLine? = history.lastOrNull()
 
     fun clearHistory() {
         history.clear()
@@ -111,6 +144,16 @@ object OfflineTranslationManager {
     @Volatile
     private var snapshot = Snapshot()
         private set
+
+    /**
+     * 当前（或最近一次）会话的方向。
+     *
+     * SDK 的 onSegment 回调不带方向，而副屏需要它来决定显示原文还是译文，
+     * 因此在 onStateChanged 里记一份，供 onSegment 使用。
+     */
+    @Volatile
+    private var currentDirection: BilingualTranslateSdk.Direction =
+        BilingualTranslateSdk.Direction.ZH_TO_ID
 
     @Volatile
     private var initStarted = false
@@ -322,10 +365,12 @@ object OfflineTranslationManager {
             }
 
             override fun onSegment(asrText: String, mtText: String?) {
-                // 先落到历史，再广播：页面即使此刻不在，事后 onResume 也能恢复
-                val line = if (mtText.isNullOrBlank()) asrText else "$asrText\n→ $mtText"
-                history.add(line)
-                sessionListeners.forEach { runCatching { it.onSegment(asrText, mtText) } }
+                // 先落到历史，再广播：页面即使此刻不在，事后 onResume 也能恢复；
+                // 副屏也靠这里补上方向信息（onSegment 本身不带方向）
+                history.add(ResultLine(asrText, mtText, currentDirection))
+                sessionListeners.forEach {
+                    runCatching { it.onSegment(asrText, mtText, currentDirection) }
+                }
             }
 
             override fun onFinished(fullText: String, elapsedMs: Long) {
@@ -336,6 +381,8 @@ object OfflineTranslationManager {
                 recording: Boolean,
                 direction: BilingualTranslateSdk.Direction,
             ) {
+                // 记住本次方向：后续 onSegment 拿不到方向参数，靠这个补
+                currentDirection = direction
                 val zhToId = direction == BilingualTranslateSdk.Direction.ZH_TO_ID
                 sessionListeners.forEach { runCatching { it.onRecordingChanged(recording, zhToId) } }
             }

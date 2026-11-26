@@ -73,6 +73,19 @@ class OfflineTransActivity : AppCompatActivity() {
     /** 页面是否处于前台（onResume 之后为 true）。测试通道要等它变 true 再跑。 */
     private var isResumed = false
 
+    /**
+     * 页面是否处于「可见」状态（onStart 之后、onStop 之前为 true）。
+     *
+     * 与 [isResumed] 的区别：onStart 与 onResume 之间、onPause 与 onStop 之间都有窗口，
+     * 而副屏的电源控制挂在 onStart/onStop 上，所以判断副屏要不要显示必须用这个。
+     *
+     * 用途：拦住 `SecondaryDisplayManager` 里那些**延时**任务
+     * （scheduleShowPresentation 500ms / ensureTop 循环）。
+     * 不拦的话会出现：onStop 已发 TURN_OFF 关电，500ms 后延迟任务又把
+     * Presentation 显示上去 → 副屏黑屏，但 `dumpsys display` 认为有内容。
+     */
+    private var isForeground = false
+
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     // ---------------- 生命周期 ----------------
@@ -93,14 +106,24 @@ class OfflineTransActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        // 打开副屏 + 显示 Presentation（内部有 500ms 延时与失败重试）
+        // 打开副屏 + 显示 Presentation（内部有 500ms 延时与失败重试）。
+        // 注意顺序：先把 isForeground 置 true 并放开 displayAllowed，再调 onStart，
+        // 否则 onStart 里立刻排的 500ms 延迟任务会因为标记还是 false 被自己跳过。
+        isForeground = true
+        displayManager.setDisplayAllowed(true)
         displayManager.onStart()
+        Log.i(TAG, "onStart: 副屏 onStart 已调用")
     }
 
     override fun onStop() {
+        // 先撤销「允许显示」再 onStop：让所有排队中的延迟显示任务失效，
+        // 否则会出现「onStop 已关副屏电源，500ms 后的 showPresentation 又把
+        // Presentation 显示上去」→ 副屏黑屏但系统认为有内容。
+        isForeground = false
+        displayManager.setDisplayAllowed(false)
         super.onStop()
-        // 关闭副屏电源，避免离开页面后仍占着 HDMI 显示
         displayManager.onStop()
+        Log.i(TAG, "onStop: 副屏 onStop 已调用")
     }
 
     /**

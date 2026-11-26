@@ -17,6 +17,17 @@ import android.view.Display
 /**
  * 副屏显示管理器
  * 负责副屏检测、Presentation显示/隐藏、开关副屏广播、HALL传感器监听
+ *
+ * ## 为什么需要进程级引用计数
+ * 副屏（HDMI）是**进程级共享资源**，但每个 Activity 都 new 了一个本类实例。
+ * 当 MainActivity → OfflineTransActivity 时，两个实例会同时存在：
+ * - OfflineTransActivity.onStart → 发 TURN_ON（正确）
+ * - MainActivity.onStop        → 发 TURN_OFF（**把刚点亮的副屏关掉了**）
+ * 结果是副屏黑屏但 Presentation 已 show，`dumpsys display` 还显示 mHasContent=true。
+ *
+ * 解法：用 [activeHosts] 记录"当前有几个宿主处于 onStart 状态"，
+ * 只有**第一个**真正发 TURN_ON、**最后一个**真正发 TURN_OFF，
+ * 中间 Activity 切换时电源保持不变。
  */
 class SecondaryDisplayManager(
     private val activity: Activity,
@@ -36,6 +47,30 @@ class SecondaryDisplayManager(
     private var userPresentReceiver: android.content.BroadcastReceiver? = null
     private var isUserPresentRegistered = false
     private var hasTurnedOnSubScreen = false
+
+    /**
+     * 宿主是否允许在当前时刻显示副屏。
+     *
+     * 由宿主的 onStart/onStop 切换。为 false 时：
+     * - [scheduleShowPresentation] 的延迟任务直接放弃（不再 showPresentation）；
+     * - [scheduleEnsureTop] 的保活循环不再重建 Presentation。
+     *
+     * 没有这个开关会出问题：onStop 已经发了 TURN_OFF 关掉副屏电源，
+     * 但 500ms 后排队的 showPresentation 仍会把 Presentation 显示出来，
+     * 于是「副屏黑屏 + 系统认为 mHasContent=true」同时成立，用户看到就是不亮。
+     */
+    @Volatile
+    private var displayAllowed: Boolean = true
+
+    fun setDisplayAllowed(allowed: Boolean) {
+        displayAllowed = allowed
+        if (!allowed) {
+            // 立刻撤掉所有排队中的任务，避免它们在上面的标记生效前抢跑
+            cancelEnsureTop()
+            pendingShowRunnable?.let { handler.removeCallbacks(it) }
+            pendingShowRunnable = null
+        }
+    }
 
     private val hallSensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent?) {
@@ -107,6 +142,12 @@ class SecondaryDisplayManager(
         pendingShowRunnable?.let { handler.removeCallbacks(it) }
         cancelEnsureTop()
         pendingShowRunnable = Runnable {
+            // 宿主已切到后台（onStop 发过 TURN_OFF）：不能再把 Presentation 显示出来，
+            // 否则副屏电源是关的、却挂着一个有内容的 Presentation，表现为「黑屏不亮」。
+            if (!displayAllowed) {
+                Log.e(TAG, "宿主不在前台，跳过延迟的 showPresentation")
+                return@Runnable
+            }
             if (isProcessingDisplayChange) return@Runnable
             isProcessingDisplayChange = true
             try {
@@ -128,9 +169,14 @@ class SecondaryDisplayManager(
     private fun scheduleEnsureTop() {
         cancelEnsureTop()
         ensureTopRunnable = Runnable {
+            // 后台时不再复活 Presentation；重新回到前台会由 onStart 重新排这个循环
+            if (!displayAllowed) {
+                Log.e(TAG, "宿主不在前台，停止 ensureTop 保活")
+                return@Runnable
+            }
             if (presentation != null && isDualScreen) {
                 if (presentation?.isShowing == true) {
-                    Log.e(TAG, "重新显示Presentation确保在最上层")
+//                    Log.e(TAG, "重新显示Presentation确保在最上层")
                     try {
                         presentation?.hide()
                         presentation?.show()
@@ -206,21 +252,42 @@ class SecondaryDisplayManager(
     }
 
     fun onStart() {
-        Log.e(TAG, "onStart: 打开副屏")
-        turnOnSubScreen()
+        val first = synchronized(Companion) {
+            activeHosts++
+            val isFirst = activeHosts == 1
+            Log.e(TAG, "onStart: 打开副屏（active=${activeHosts}, first=$isFirst）")
+            isFirst
+        }
+        // 只有第一个宿主才真正给副屏上电；后续 Activity 切换沿用现有电源
+        if (first || !subScreenOn) {
+            turnOnSubScreen()
+        } else {
+            Log.e(TAG, "onStart: 副屏已由其它宿主点亮，跳过 TURN_ON")
+        }
         scheduleShowPresentation(500)
     }
 
     fun onStop() {
-        Log.e(TAG, "onStop: 关闭副屏")
+        val last = synchronized(Companion) {
+            if (activeHosts > 0) activeHosts--
+            val isLast = activeHosts == 0
+            Log.e(TAG, "onStop: 关闭副屏（active=${activeHosts}, last=$isLast）")
+            isLast
+        }
         cancelEnsureTop()
         pendingShowRunnable?.let { handler.removeCallbacks(it) }
+        pendingShowRunnable = null
         if (presentation != null) {
             try { presentation?.dismiss() } catch (e: Exception) {}
             presentation = null
         }
-        turnOffSubScreen()
-        hasTurnedOnSubScreen = false
+        // 只有最后一个宿主退出才真正关电源，否则 A 切 B 时会把副屏关掉
+        if (last) {
+            turnOffSubScreen()
+            hasTurnedOnSubScreen = false
+        } else {
+            Log.e(TAG, "onStop: 仍有其它宿主在前台，保持副屏点亮")
+        }
     }
 
     private fun registerUserPresentReceiver() {
@@ -274,13 +341,14 @@ class SecondaryDisplayManager(
     }
 
     fun turnOnSubScreen() {
-        if (hasTurnedOnSubScreen) {
+        if (subScreenOn) {
             Log.e(TAG, "副屏已开启，跳过重复发送TURN_ON广播")
             return
         }
         val intent = Intent("custom.intent.TURN_ON_SUB_SCREEN")
         intent.setPackage("com.android.settings")
         activity.sendBroadcast(intent)
+        subScreenOn = true
         hasTurnedOnSubScreen = true
         Log.e(TAG, "Turn on sub screen")
     }
@@ -289,6 +357,7 @@ class SecondaryDisplayManager(
         val intent = Intent("custom.intent.TURN_OFF_SUB_SCREEN")
         intent.setPackage("com.android.settings")
         activity.sendBroadcast(intent)
+        subScreenOn = false
         Log.e(TAG, "Turn off sub screen")
     }
 
@@ -363,7 +432,15 @@ class SecondaryDisplayManager(
     fun release() {
         cancelEnsureTop()
         pendingShowRunnable?.let { handler.removeCallbacks(it) }
-        turnOffSubScreen()
+        pendingShowRunnable = null
+        // 与 onStop 一致：只有没有其它宿主在前台时才真正断电。
+        // 否则「MainActivity 销毁」会把 OfflineTransActivity正在用的副屏关掉。
+        val noHostLeft = synchronized(Companion) { activeHosts <= 0 }
+        if (noHostLeft) {
+            turnOffSubScreen()
+        } else {
+            Log.e(TAG, "release: 仍有 $activeHosts 个宿主活跃，保持副屏点亮")
+        }
         dismissPresentation()
         unregisterHallSensor()
         unregisterUserPresentReceiver()
@@ -373,5 +450,20 @@ class SecondaryDisplayManager(
 
     companion object {
         private const val TAG = "SecondaryDisplayMgr"
+
+        /**
+         * 当前处于 onStart 的宿主（Activity）数量。
+         *
+         * 副屏是进程级共享资源，但每个 Activity 各持有一个本类实例。
+         * 若不做计数，MainActivity.onStop 会在 OfflineTransActivity.onStart 之后
+         * 把副屏电源关掉（A→B 跳转时必然发生），表现为副屏黑屏不亮。
+         *
+         * 语义：只在 0→1 时上电、1→0 时断电；中间切换保持现状。
+         */
+        private var activeHosts = 0
+
+        /** 副屏电源当前是否已由本进程打开（跨实例共享，避免重复发广播）。 */
+        @Volatile
+        private var subScreenOn = false
     }
 }

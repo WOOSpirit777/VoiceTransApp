@@ -29,10 +29,17 @@
         android:name=".VoiceTransApplication"
         android:theme="@style/Theme.VoiceTransApp"
         android:usesCleartextTraffic="true">
+        <!--
+          锁定竖屏（portrait）。
+          本机是 720x1560 的竖屏手持设备，横屏会让两套竖屏布局被压扁
+          （离线界面结果区只剩 200px）。这里逐 Activity 声明，
+          不用 "sensorPortrait"：本机屏幕固定、无翻转需求，锁死更稳。
+        -->
 
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -43,16 +50,19 @@
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
+            android:screenOrientation="portrait"
              />
         <!-- exported=true 只为让 adb 能直接拉起测试通道（test_wav extra）；
              该页面本身不对外提供任何数据，正式交付可改回 false。
-             不锁定方向：PDS01 是 720x1560 竖屏设备，强制 landscape 会让
-             Surface 尺寸与屏幕不匹配，横屏布局本身用 ConstraintLayout 自适应。 -->
+             方向锁定竖屏：布局按 720x1560 设计，横屏会把结果区压到 200px。 -->
         <activity
             android:name=".ui.OfflineTransActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
-        <activity android:name="com.aibabel.voicetrans.ui.BroadcastUrlActivity" />
+        <activity
+            android:name="com.aibabel.voicetrans.ui.BroadcastUrlActivity"
+            android:screenOrientation="portrait" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
